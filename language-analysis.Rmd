@@ -50,15 +50,21 @@ user_lan <- user_lan[,c(1:7,11:20)]
 names(user_lan)[c(4:7,10:16)] <- c("dslope","dintercept","dlowslope","dhighslope","sslope","sintercept","slowslope","shighslope","first_comment","last_comment","comment_number")
 
 remove(domain_cpd,domain_theil,science_cpd,science_theil)
-#classifications <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/gravityspy/gravity-spy-classifications_72522.csv") # move to Zoonvierse Datasets folder
+classifications <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/gravityspy/classifications_reduced031422.csv") # move to Zoonvierse Datasets folder
+classifications$created_at2 <- as.POSIXct(classifications$created_at , format="%Y-%m-%d %H:%M:%S") # The time the classification is recorded in the Zooniverse database see: https://github.com/zooniverse/Data-digging/blob/master/docs/classification_export_field_descriptors.txt
 
- comments <- read_csv("/Volumes/cbjackson2/language models/gravity-spy-comments-processed06-May-2021 11.05.csv") # move to Zoonvierse Datasets folder
+comments <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/gravityspy/gravity-spy-comments_2022-07-15.csv") # move to Zoonvierse Datasets folder
 
+comments$created_at <- as.POSIXct(comments$comment_created_at , format="%Y-%m-%d %H:%M:%S")
+comments <- comments[which(comments$created_at <= "2022-03-14 15:39:44"),]
 
+#earliest overlapping record is "2022-03-14 15:39:44 UTC"
+
+# Issue with system times (they do not overlap in most instances )
 ```
 
 ```{r setup-classifications, include=FALSE, warning=FALSE}
-session_builder1 <- data.frame(classifications$id,classifications$user_id,classifications$created_at,"classification")
+session_builder1 <- data.frame(classifications$classification_id,classifications$user_id,classifications$created_at2,"classification")
 names(session_builder1)[c(1:4)] <- c("id","user_id","created_at","type")
 
 session_builder2 <- data.frame(comments$comment_id,comments$comment_user_id,comments$comment_created_at,"comment")
@@ -66,17 +72,21 @@ names(session_builder2)[c(1:4)] <- c("id","user_id","created_at","type")
 
 session_builder <- rbind(session_builder1,session_builder2)
 remove(session_builder1,session_builder2)
-
+session_builder$user_id <- as.factor(session_builder$user_id)
+explore_82_se <- session_builder[which(session_builder$user_id=="82"),]
 
 # Add session information for classifications 
 session_builder <- session_builder[order(session_builder$user_id,session_builder$created_at),]
 session_builder <- data.table(session_builder)
+
 session_builder <- session_builder[,session:=paste(cumsum(c(1,diff(created_at) > 1800)),sep="."),by=user_id]
 session_builder <- session_builder[,act_seq := sequence(.N), by = c("user_id")] # order of events
 
+if(any(grepl("package:plyr", search()))) detach("package:plyr") else message("plyr not loaded")
+library(dplyr)
 
 user_session <- session_builder %>% 
-   group_by(user_id,session) %>%  
+   group_by(user_id = as.factor(user_id),session) %>%  
    summarise(
    class = length(which(type=="classification")),
    comment = length(which(type=="comment")),
@@ -85,7 +95,7 @@ user_session <- session_builder %>%
    )
 
 user_info <- session_builder %>% 
-   group_by(user_id) %>%  
+   group_by(user_id = as.factor(user_id)) %>%  
    summarise(
    class = length(which(type=="classification")),
    comment = length(which(type=="comment")),
@@ -95,6 +105,15 @@ user_info <- session_builder %>%
    first_comment_seq = min(act_seq[which(type=="comment")]),
    first_comment_ses = min(session[which(type=="comment")])
    )
+
+# Sanity check
+explore_82_se <- session_builder[which(session_builder$user_id=="82"),]
+explore_82 <- user_session[which(user_session$user_id=="82"),]
+
+## User 33 has 4 hours 5 minutes differnce between submitting comment and next classification
+
+## Go look at a user who commented on a subject and compare the timestamps. 
+
 
 ### Merge dataset about user
 #user_history_domain <- merge(user_info,domain_theil, by = "user_id)
