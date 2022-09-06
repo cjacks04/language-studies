@@ -28,10 +28,10 @@ names(science_theil)[1] <- "user_id"
 science_theil$first_comment <- mdy_hm (science_theil$first_comment)
 science_theil$last_comment <- mdy_hm(science_theil$last_comment)
 science_theil$comment_tenure <- difftime(science_theil$last_comment,science_theil$first_comment, units = "days")
+science_theil$user_id <- as.factor(science_theil$user_id)
 
 names(science_cpd) <- c("user_id","sci_change_points")
 science_cpd$sci_changes <- str_count(science_cpd$sci_change_points, ',')
-
 
 # import domain 
 cos_domain <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/Agg_Weekly_cos_result.csv") 
@@ -41,6 +41,7 @@ domain_cpd <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/3M_Ag
 names(domain_theil)[1] <- "user_id"
 names(domain_cpd) <- c("user_id","domain_change_points")
 domain_cpd$domain_changes <- str_count(domain_cpd$domain_change_points, ',')
+domain_theil$user_id <- as.factor(domain_theil$user_id)
 
 user_lan <- merge(domain_cpd,domain_theil, by = "user_id")
 user_lan <- merge(user_lan,science_cpd, by = "user_id")
@@ -59,21 +60,19 @@ comments$created_at <- as.POSIXct(comments$comment_created_at , format="%Y-%m-%d
 comments <- comments[which(comments$created_at <= "2022-03-14 15:39:44"),]
 
 #earliest overlapping record is "2022-03-14 15:39:44 UTC"
-
-# Issue with system times (they do not overlap in most instances )
 ```
 
 ```{r setup-classifications, include=FALSE, warning=FALSE}
-session_builder1 <- data.frame(classifications$classification_id,classifications$user_id,classifications$created_at2,"classification")
+session_builder1 <- data.frame(classifications$classification_id,classifications$user_id,as.character(classifications$created_at2),"classification")
 names(session_builder1)[c(1:4)] <- c("id","user_id","created_at","type")
 
-session_builder2 <- data.frame(comments$comment_id,comments$comment_user_id,comments$comment_created_at,"comment")
+session_builder2 <- data.frame(comments$comment_id,comments$comment_user_id,as.character(comments$created_at),"comment")
 names(session_builder2)[c(1:4)] <- c("id","user_id","created_at","type")
 
 session_builder <- rbind(session_builder1,session_builder2)
 remove(session_builder1,session_builder2)
 session_builder$user_id <- as.factor(session_builder$user_id)
-explore_82_se <- session_builder[which(session_builder$user_id=="82"),]
+session_builder$created_at <- as.POSIXct(session_builder$created_at , format="%Y-%m-%d %H:%M:%S")
 
 # Add session information for classifications 
 session_builder <- session_builder[order(session_builder$user_id,session_builder$created_at),]
@@ -94,6 +93,16 @@ user_session <- session_builder %>%
    end = max(created_at)
    )
 
+user_week <- session_builder %>% 
+   group_by(user_id = as.factor(user_id),week=floor_date(created_at, "week")) %>%  
+   summarise(
+   class = length(which(type=="classification")),
+   comment = length(which(type=="comment")),
+   sessions = length(unique(session)),
+   start = min(created_at),
+   end = max(created_at)
+   )
+
 user_info <- session_builder %>% 
    group_by(user_id = as.factor(user_id)) %>%  
    summarise(
@@ -105,20 +114,6 @@ user_info <- session_builder %>%
    first_comment_seq = min(act_seq[which(type=="comment")]),
    first_comment_ses = min(session[which(type=="comment")])
    )
-
-# Sanity check
-explore_82_se <- session_builder[which(session_builder$user_id=="82"),]
-explore_82 <- user_session[which(user_session$user_id=="82"),]
-
-## User 33 has 4 hours 5 minutes differnce between submitting comment and next classification
-
-## Go look at a user who commented on a subject and compare the timestamps. 
-
-
-### Merge dataset about user
-#user_history_domain <- merge(user_info,domain_theil, by = "user_id)
-#user_history_domain <- merge(user_history_domain,domain_cpd, by = "user_id)
-#remove(user_info,domain_theil,domain_cpd)
 ```
 
 ```{r setup-domain, include=FALSE}
