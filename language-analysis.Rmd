@@ -185,7 +185,7 @@ wc_d.m.comment <- ggplot(wc_d.m, aes(x = commentweek, y = value)) + # plot cosin
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 ```
 
-```{r}
+```{r models, warning=FALSE,error=FALSE}
 # Create dataset for modeling. 
 # Retention =
 
@@ -223,8 +223,17 @@ newcomer_info <- merge(newcomer_info,user_info[,c("user_id","class","comment","r
 # Newcomer period for all users
 newcomer_info <- merge(newcomer_info,user_lan[,c(1:13)],by="user_id",all.x=TRUE )
 
+
+#retention.glm <- glm(retained ~ IVs, data = )
+
+#NEED: lang.sim + change.pt + slope  (during newcomer period first four weeks)
+#DONE: lurking period + number of tasks + number of comments + sessions
+
+### SIMILARITY MODELS
+
 #Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
 
+#similarity.mef <- nlme(similarity ~ IVs, data = )
 ```
 
 
