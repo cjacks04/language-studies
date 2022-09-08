@@ -2,10 +2,12 @@
 title: "Language Socialization"
 author: "Corey Jackson"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
-```{r setup, include = FALSE}
+```{r setup, cache=TRUE, warning=FALSE}
 
 # add libraries
 library(reshape2)
@@ -18,11 +20,15 @@ library(ggplot2)
 library(readr)
 library(stringr)
 library(lubridate)
-library(lme4)
+#library(lmer)
+library(stargazer)
+library(caret)
+library(rcompanion)
+
 # import science
 cos_science <- read_csv("/Volumes/cbjackson2/language models/outputs/astronomy/Agg_Weekly_cos_result_Astro.csv") 
-science_theil <- read_csv("/Volumes/cbjackson2/language models/outputs/astronomy/3M_Agg_Theil_result_Astro.csv") 
-science_cpd <- read_csv("/Volumes/cbjackson2/language models/outputs/astronomy/3M_Agg_CPD_result_Astro.csv") 
+science_theil <- read_csv("/Volumes/cbjackson2/language models/outputs/astronomy/1M_Agg_Theil_result_Astro.csv") 
+science_cpd <- read_csv("/Volumes/cbjackson2/language models/outputs/astronomy/1M_Agg_CPD_result_Astro.csv") 
 
 names(science_theil)[1] <- "user_id"
 science_theil$first_comment <- mdy_hm (science_theil$first_comment)
@@ -35,8 +41,8 @@ science_cpd$sci_changes <- str_count(science_cpd$sci_change_points, ',')
 
 # import domain 
 cos_domain <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/Agg_Weekly_cos_result.csv") 
-domain_theil <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/3M_Agg_Theil_result.csv") 
-domain_cpd <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/3M_Agg_CPD_result.csv") 
+domain_theil <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/1M_Agg_Theil_result.csv") 
+domain_cpd <- read_csv("/Volumes/cbjackson2/language models/outputs/domain/1M_Agg_CPD_result.csv") 
 
 names(domain_theil)[1] <- "user_id"
 names(domain_cpd) <- c("user_id","domain_change_points")
@@ -62,7 +68,7 @@ comments <- comments[which(comments$created_at <= "2022-03-14 15:39:44"),]
 #earliest overlapping record is "2022-03-14 15:39:44 UTC"
 ```
 
-```{r setup-classifications, include=FALSE, warning=FALSE}
+```{r setup-classifications, include = FALSE, cache=TRUE, warning=FALSE}
 session_builder1 <- data.frame(classifications$classification_id,classifications$user_id,as.character(classifications$created_at2),"classification")
 names(session_builder1)[c(1:4)] <- c("id","user_id","created_at","type")
 
@@ -118,7 +124,7 @@ user_info <- session_builder %>%
 
 ```
 
-```{r setup-domain, include=FALSE}
+```{r setup-domain, include = FALSE, cache=TRUE, warning=FALSE}
 # ANALYSIS OF science LANGUAGE
 wc_s <- data.frame(t(cos_science)) # transpose
 wc_s <- cbind(rownames(wc_s),wc_s); colnames(wc_s) <- wc_s[1,]; names(wc_s)[1] <- "user_id"; wc_s <- wc_s[-c(1),]; rownames(wc_s) <- 1:dim(wc_s)[1] # Fix dataframe row/columns
@@ -185,10 +191,9 @@ wc_d.m.comment <- ggplot(wc_d.m, aes(x = commentweek, y = value)) + # plot cosin
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 ```
 
-```{r models, warning=FALSE,error=FALSE}
+```{r models, include = FALSE, cache=TRUE, warning=FALSE}
 # Create dataset for modeling. 
 # Retention =
-
 #NEED: lang.sim + change.pt + slope  (during newcomer period first four weeks)
 #DONE: lurking period + number of tasks + number of comments + sessions
 
@@ -211,6 +216,9 @@ newcomer_info <- session_builder_newcomer %>%
    join_date = min(created_at),
    newcomer_recent_date = max(created_at),
    newcomer_sessions = length(unique(session)),
+   newcomer_weeks = length(unique(floor_date(created_at, "week"))),
+   newcomer_days = length(unique(floor_date(created_at, "days"))),
+   newcomer_comment_days = length(unique(floor_date(created_at, "days")[which(type=="comment")])),
    newcomer_first_comment_seq = min(act_seq[which(type=="comment")]),
    newcomer_first_comment_ses = min(session[which(type=="comment")]))
 
@@ -222,39 +230,91 @@ newcomer_info <- merge(newcomer_info,user_info[,c("user_id","class","comment","r
 
 # Newcomer period for all users
 newcomer_info <- merge(newcomer_info,user_lan[,c(1:13)],by="user_id",all.x=TRUE )
+newcomer_info$retained <- ifelse(newcomer_info$class > newcomer_info$newcomer_class,1,0)
 
+## ## ## ## ## ## ## ## ## ## ## ## ## 
+## HOW TO LIMIT WINDOW OF NEWCOMERS? 
 
-#retention.glm <- glm(retained ~ IVs, data = )
+newcomer_info_commenters <- newcomer_info[which(newcomer_info$newcomer_weeks >= 2 & newcomer_info$newcomer_comment>=1),]
+```
 
-#NEED: lang.sim + change.pt + slope  (during newcomer period first four weeks)
+```{r modelsrun, echo=FALSE}
+logit2prob <- function(logit){
+  odds <- exp(logit)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+################################
+#   ALL MODELS          #
+################################
+
+# Perhaps zero-inflated (https://stats.oarc.ucla.edu/r/dae/zip/)
+# logistic for adoption (https://rpubs.com/OmaymaS/182726)
+trainIndex <- createDataPartition(newcomer_info$retained, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train <- newcomer_info[ trainIndex,]
+valid <- newcomer_info[-trainIndex,]
+
+retention.glm <- glm(retained ~ newcomer_class+newcomer_comment+newcomer_sessions,
+data = train) # MODEL
+logit2prob(coef(retention.glm))
+nagelkerke(retention.glm) # performance 
+
+predict <- predict(retention.glm , newdata = valid, type = 'response')
+confusionMatrix(data = factor(as.numeric(predict>0.5)), reference = factor(valid$retained))
+
+################################
+#   COMMENTERS MODELS          #
+################################
+
+trainIndex <- createDataPartition(newcomer_info_commenters$retained, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train <- newcomer_info_commenters[ trainIndex,]
+valid <- newcomer_info_commenters[-trainIndex,]
+
+retention_commenters.glm <- glm(retained ~ newcomer_class+newcomer_comment+newcomer_sessions,
+data = train)
+logit2prob(coef(retention_commenters.glm))
+nagelkerke(retention_commenters.glm) # performance 
+
+predict <- predict(retention_commenters.glm , newdata = valid, type = 'response')
+confusionMatrix(data = factor(as.numeric(predict>0.5)), reference = factor(valid$retained))
+
+#NEED: lang.sim + slope  (during newcomer period first four weeks)
 #DONE: lurking period + number of tasks + number of comments + sessions
 
-### SIMILARITY MODELS
+### SIMILARITY MODEL
 
 #Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
 
 #similarity.mef <- nlme(similarity ~ IVs, data = )
+
+# stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (18 to 65)"), 
+#            column.labels = ("Model results"), 
+#            covariate.labels = c("Time", "Encouragement", "Time Since Encouragement"),
+#            omit.stat = "all", digits = 2)
 ```
 
-
+```{r}
+stargazer(retention.glm,
+           omit.stat = "all", digits = 2,type="html")
+```
 
 ## Science cosine language
-```{r, echo=FALSE}
-
-```
 
 ```{r}
 wc_s.m.real
 wc_s.m.comment
 ```
 
-
-
 ## Domain cosine language
+
 ```{r}
 wc_d.m.real
 wc_d.m.comment
 ```
 
-#https://m-clark.github.io/mixed-models-with-R/introduction.html
-
+\#<https://m-clark.github.io/mixed-models-with-R/introduction.html>
