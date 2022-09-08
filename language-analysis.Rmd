@@ -218,6 +218,8 @@ newcomer_info <- session_builder_newcomer %>%
    newcomer_sessions = length(unique(session)),
    newcomer_weeks = length(unique(floor_date(created_at, "week"))),
    newcomer_days = length(unique(floor_date(created_at, "days"))),
+   newcomer_comment_weeks = length(unique(floor_date(created_at, "week")[which(type=="comment")])),
+
    newcomer_comment_days = length(unique(floor_date(created_at, "days")[which(type=="comment")])),
    newcomer_first_comment_seq = min(act_seq[which(type=="comment")]),
    newcomer_first_comment_ses = min(session[which(type=="comment")]))
@@ -236,6 +238,8 @@ newcomer_info$retained <- ifelse(newcomer_info$class > newcomer_info$newcomer_cl
 ## HOW TO LIMIT WINDOW OF NEWCOMERS? 
 
 newcomer_info_commenters <- newcomer_info[which(newcomer_info$newcomer_weeks >= 2 & newcomer_info$newcomer_comment>=1),]
+
+# Change and actual similarity score
 ```
 
 ```{r modelsrun, echo=FALSE}
