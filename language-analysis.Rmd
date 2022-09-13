@@ -66,6 +66,14 @@ comments$created_at <- as.POSIXct(comments$comment_created_at , format="%Y-%m-%d
 comments <- comments[which(comments$created_at <= "2022-03-14 15:39:44"),]
 
 #earliest overlapping record is "2022-03-14 15:39:44 UTC"
+
+# Get information about commmunicative practices during newcomer period. 
+comments$questions <- stringr::str_count(comments$comment_body, "\\?")
+comments$replies <- stringr::str_count(comments$comment_body, "> In reply to")
+comments$links <- stringr::str_count(comments$comment_body, "http")
+comments$words <- stringr::str_count(comments$comment_body, "\\w+")
+
+write.csv(comments,"/Volumes/cbjackson2/language models/comments_newcomer_add.csv")
 ```
 
 ```{r setup-classifications, include = FALSE, cache=TRUE, warning=FALSE}
@@ -86,6 +94,8 @@ session_builder <- data.table(session_builder)
 
 session_builder <- session_builder[,session:=paste(cumsum(c(1,diff(created_at) > 1800)),sep="."),by=user_id]
 session_builder <- session_builder[,act_seq := sequence(.N), by = c("user_id")] # order of events
+session_builder <- session_builder[which(!is.na(session_builder$created_at)),]
+
 
 if(any(grepl("package:plyr", search()))) detach("package:plyr") else message("plyr not loaded")
 library(dplyr)
@@ -98,6 +108,7 @@ user_session <- session_builder %>%
    start = min(created_at),
    end = max(created_at)
    )
+
 
 user_week <- session_builder %>% 
    group_by(user_id = as.factor(user_id),week=floor_date(created_at, "week")) %>%  
@@ -189,6 +200,9 @@ wc_d.m.comment <- ggplot(wc_d.m, aes(x = commentweek, y = value)) + # plot cosin
       labs(x = "Comment week", y  = "Cosine similarity") + 
       theme_ipsum() +
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+
+write.csv(wc_d.m,"/Volumes/cbjackson2/language models/cosine_domain.csv")
+write.csv(wc_s.m,"/Volumes/cbjackson2/language models/cosine_science.csv")
 ```
 
 ```{r models, include = FALSE, cache=TRUE, warning=FALSE}
@@ -242,70 +256,7 @@ newcomer_info_commenters <- newcomer_info[which(newcomer_info$newcomer_weeks >= 
 # Change and actual similarity score
 ```
 
-```{r modelsrun, echo=FALSE}
-logit2prob <- function(logit){
-  odds <- exp(logit)
-  prob <- odds / (1 + odds)
-  return(prob)
-}
 
-################################
-#   ALL MODELS          #
-################################
-
-# Perhaps zero-inflated (https://stats.oarc.ucla.edu/r/dae/zip/)
-# logistic for adoption (https://rpubs.com/OmaymaS/182726)
-trainIndex <- createDataPartition(newcomer_info$retained, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train <- newcomer_info[ trainIndex,]
-valid <- newcomer_info[-trainIndex,]
-
-retention.glm <- glm(retained ~ newcomer_class+newcomer_comment+newcomer_sessions,
-data = train) # MODEL
-logit2prob(coef(retention.glm))
-nagelkerke(retention.glm) # performance 
-
-predict <- predict(retention.glm , newdata = valid, type = 'response')
-confusionMatrix(data = factor(as.numeric(predict>0.5)), reference = factor(valid$retained))
-
-################################
-#   COMMENTERS MODELS          #
-################################
-
-trainIndex <- createDataPartition(newcomer_info_commenters$retained, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train <- newcomer_info_commenters[ trainIndex,]
-valid <- newcomer_info_commenters[-trainIndex,]
-
-retention_commenters.glm <- glm(retained ~ newcomer_class+newcomer_comment+newcomer_sessions,
-data = train)
-logit2prob(coef(retention_commenters.glm))
-nagelkerke(retention_commenters.glm) # performance 
-
-predict <- predict(retention_commenters.glm , newdata = valid, type = 'response')
-confusionMatrix(data = factor(as.numeric(predict>0.5)), reference = factor(valid$retained))
-
-#NEED: lang.sim + slope  (during newcomer period first four weeks)
-#DONE: lurking period + number of tasks + number of comments + sessions
-
-### SIMILARITY MODEL
-
-#Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
-
-#similarity.mef <- nlme(similarity ~ IVs, data = )
-
-# stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (18 to 65)"), 
-#            column.labels = ("Model results"), 
-#            covariate.labels = c("Time", "Encouragement", "Time Since Encouragement"),
-#            omit.stat = "all", digits = 2)
-```
-
-```{r}
-stargazer(retention.glm,
-           omit.stat = "all", digits = 2,type="html")
-```
 
 ## Science cosine language
 
@@ -321,4 +272,4 @@ wc_d.m.real
 wc_d.m.comment
 ```
 
-\#<https://m-clark.github.io/mixed-models-with-R/introduction.html>
+#<https://m-clark.github.io/mixed-models-with-R/introduction.html>

@@ -5,10 +5,186 @@ date: "2022-09-08"
 ---
 
 ```{r}
-
+# Libraries Needed
+library(reshape2)
+library(hrbrthemes)
+library(scales)
+library(ggsci)
+library(data.table)
+library(dplyr)
+library(ggplot2)
 library(readr)
-newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info_commenters.csv")
+library(stringr)
+library(lubridate)
+library(lme4)
+library(stargazer)
+library(caret)
+library(rcompanion)
+
+#Functions
+logit2prob <- function(logit){
+  odds <- exp(logit)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+launch_date <- as.POSIXct("2016-10-12 12:00:00",  format="%Y-%m-%d %H:%M:%S")
+
+
+newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv")
+newcomers_data <- newcomers_data[,-1]
+
+comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.csv") 
+
+# Add newcomer comment features to newcomers_data
+comments <- merge(comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
+comments$include <- ifelse(comments$comment_created_at <= comments$join_date + lubridate::days(30),1,0)
+comments <- comments[which(comments$include==1),]
+
+comment_summary <- comments %>% 
+  group_by(user_id=comment_user_id) %>%
+  summarise(comment_no=length(comment_id),
+            questions = sum(questions),
+            replies = sum(replies),
+            links = sum(links),
+            words = sum(words)
+  )
+
+newcomers_data <- merge(newcomers_data,comment_summary, by="user_id",all.x = TRUE)
+newcomers_data$Class <- as.factor(newcomers_data$retained)
+newcomers_data$since_start <- round(as.numeric(difftime(newcomers_data$join_date,launch_date,units = "days")),digits = 0)
+newcomers_data_org <- newcomers_data
+
+
+remove(comments,comment_summary)
+#newcomers_data <- newcomers_data_org
+newcomers_data <- newcomers_data[which(newcomers_data$join_date >= launch_date),] # removed 1096 users who were around prior to launch
+
+
+### Build Cosine dataset
+domain_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_domain.csv") 
+names(domain_cosine)[c(4,8)] <- c("domain_cosine","domain_change")
+science_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_science.csv") 
+
+cosine <- merge(domain_cosine,science_cosine, by=c("user_id","variable"))
+cosine <- cosine[,c(1,2,4,8,5,6,7,10,14)]
+names(cosine)[c(5:9)] <- c("real_week","comment_week","last_session","science_cosine","science_change")
+
+# Get only newcomer cosine information
+newcomers_period <-  newcomers_data[,c(1,9)]
+cosine <- merge(cosine,newcomers_period,by="user_id")
+cosine <- cosine[which(cosine$comment_week <= cosine$newcomer_comment_weeks),]
+```
+
+```{r modelsrun, echo=FALSE}
+
+# Perhaps zero-inflated (https://stats.oarc.ucla.edu/r/dae/zip/)
+# logistic for adoption (https://rpubs.com/OmaymaS/182726)
+trainIndex_down <- createDataPartition(newcomers_data$Class, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train_down <- newcomers_data[ trainIndex_down,]
+valid_down <- newcomers_data[-trainIndex_down,]
+
+# ~2900 retained and ~16k dropout
+
+# Since the data are unbalanced, we need to implement a subsampling method - upsampling, downsampling, or a hybrid method e.g. ROSE, SMOTE. 
+
+### Downsampling
+traindown <-downSample(x=train_down[,-ncol(train_down)],
+                  y=train_down$Class)
+
+# Both classes are equal
+
+retentiondown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = traindown, family="binomial") # MODEL
+
+logit2prob(coef(retentiondown.glm)) #coefficients
+nagelkerke(retentiondown.glm) # performance measures
+
+predict.down <- predict(retentiondown.glm , newdata = valid_down, type = 'response')
+predict.down <- as.integer(predict.down>0.5)
+confusionMatrix(as.factor(predict.down),valid_down$Class)
+
+
+### Upsampling
+trainIndex_up <- createDataPartition(newcomers_data$Class, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train_up <- newcomers_data[ trainIndex_up,]
+valid_up <- newcomers_data[-trainIndex_up,]
+
+
+trainup<-upSample(x=train_up[,-ncol(train_up)],
+                  y=train_up$Class)
+
+# Both classes are equal
+retentionup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = trainup, family="binomial") # MODEL
+
+logit2prob(coef(retentionup.glm)) #coefficients
+nagelkerke(retentionup.glm) # performance measures
+
+predict.up <- predict(retentionup.glm , newdata = valid_up, type = 'response')
+predict.up <- as.integer(predict.up>0.5)
+confusionMatrix(as.factor(predict.up),valid_up$Class)
+```
+
+## Does commenting influence retention
+```{r}
+################################
+#   COMMENTERS MODELS          #
+################################
+
+##### UPSAMPLING
+
+# Get only users who actually commented during the newcomer period
+newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
+newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
+
+
+trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train_commenter_up <- newcomer_info_commenters[ trainIndex_commenter,]
+valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
+
+
+traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
+                  y=train_commenter_up$Class)
+
+retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
+
+logit2prob(coef(retention_commentersup.glm)) #coefficients
+nagelkerke(retention_commentersup.glm) # performance measures
+
+predictcommenter.up <- predict(retention_commentersup.glm , newdata = valid_commenter_up, type = 'response')
+predictcommenter.up <- as.integer(predictcommenter.up>0.5)
+confusionMatrix(as.factor(predictcommenter.up),valid_commenter_up$Class)
+
+
+##### DOWNSAMPLING
+trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train_commenter_down <- newcomer_info_commenters[ trainIndex_commenter,]
+valid_commenter_down <- newcomer_info_commenters[-trainIndex_commenter,]
+
+traincommenterdown<-upSample(x=train_commenter_down[,-ncol(train_commenter_down)],y=train_commenter_down$Class)
+
+retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
+
+logit2prob(coef(retention_commentersdown.glm)) #coefficients
+nagelkerke(retention_commentersdown.glm) # performance measures
+
+predictcommenter.down <- predict(retention_commentersdown.glm , newdata = valid_commenter_down, type = 'response')
+predictcommenter.down <- as.integer(predictcommenter.down>0.5)
+confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
+
+### SIMILARITY MODEL
+
+#Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
 
 
 ```
+
+## What impact does language simialrity have on retention
+## What impact does behaviors have on similarity
 

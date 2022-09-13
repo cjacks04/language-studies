@@ -1,0 +1,16 @@
+---
+title: "Language Socialization Models"
+author: "Corey Jackson"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r}
+library(readr)
+
+
+newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv")
+
+```
+
