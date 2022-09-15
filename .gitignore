@@ -2,3 +2,4 @@
 .Rhistory
 language-analysis.html
 *.html
+.RData
