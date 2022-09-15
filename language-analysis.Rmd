@@ -87,14 +87,20 @@ session_builder <- rbind(session_builder1,session_builder2)
 remove(session_builder1,session_builder2)
 session_builder$user_id <- as.factor(session_builder$user_id)
 session_builder$created_at <- as.POSIXct(session_builder$created_at , format="%Y-%m-%d %H:%M:%S")
+session_builder$created_at2 <- as.Date(strftime(session_builder$created_at, format = '%Y-%m-%d %H:%M:%'))
 
 # Add session information for classifications 
-session_builder <- session_builder[order(session_builder$user_id,session_builder$created_at),]
+session_builder <- session_builder[order(session_builder$user_id,session_builder$created_at2),]
 session_builder <- data.table(session_builder)
 
-session_builder <- session_builder[,session:=paste(cumsum(c(1,diff(created_at) > 1800)),sep="."),by=user_id]
+session_builder <- session_builder[,session:=paste(cumsum(c(1,diff(created_at2) > 1800)),sep="."),by=user_id]
 session_builder <- session_builder[,act_seq := sequence(.N), by = c("user_id")] # order of events
-session_builder <- session_builder[which(!is.na(session_builder$created_at)),]
+session_builder <- session_builder[which(!is.na(session_builder$created_at2)),]
+session_builder <- session_builder[which(!is.na(session_builder$user_id)),]
+
+#session_builder$created_at2 <- with_tz(session_builder$created_at, "CDT")
+#session_builder$created_at_zone <- base::format(session_builder$created_at, format="%Z")
+#session_builder$created_at2_zone <- base::format(session_builder$created_at2, format="%Z")
 
 
 if(any(grepl("package:plyr", search()))) detach("package:plyr") else message("plyr not loaded")
@@ -105,19 +111,18 @@ user_session <- session_builder %>%
    summarise(
    class = length(which(type=="classification")),
    comment = length(which(type=="comment")),
-   start = min(created_at),
-   end = max(created_at)
+   start = min(created_at2),
+   end = max(created_at2)
    )
 
-
 user_week <- session_builder %>% 
-   group_by(user_id = as.factor(user_id),week=floor_date(created_at, "week")) %>%  
+   group_by(user_id = as.factor(user_id),week=floor_date(created_at2, "week")) %>%  
    summarise(
    class = length(which(type=="classification")),
    comment = length(which(type=="comment")),
    sessions = length(unique(session)),
-   start = min(created_at),
-   end = max(created_at)
+   start = min(created_at2),
+   end = max(created_at2)
    )
 
 user_info <- session_builder %>% 
@@ -125,13 +130,14 @@ user_info <- session_builder %>%
    summarise(
    class = length(which(type=="classification")),
    comment = length(which(type=="comment")),
-   join_date = min(created_at),
-   recent_date = max(created_at),
+   join_date = min(created_at2),
+   recent_date = max(created_at2),
    sessions = length(unique(session)),
    first_comment_seq = min(act_seq[which(type=="comment")]),
    first_comment_ses = min(session[which(type=="comment")]),
-   newcomer_end = as.POSIXct(join_date + lubridate::days(30), format="%Y-%m-%d %H:%M:%S"),
-   retained=ifelse(recent_date>newcomer_end,1,0))
+   newcomer_end = (join_date + lubridate::days(30)),
+   retained=ifelse(recent_date>newcomer_end,1,0)
+   )
 
 ```
 
@@ -201,20 +207,16 @@ wc_d.m.comment <- ggplot(wc_d.m, aes(x = commentweek, y = value)) + # plot cosin
       theme_ipsum() +
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 
-write.csv(wc_d.m,"/Volumes/cbjackson2/language models/cosine_domain.csv")
-write.csv(wc_s.m,"/Volumes/cbjackson2/language models/cosine_science.csv")
+#write.csv(wc_d.m,"/Volumes/cbjackson2/language models/cosine_domain.csv")
+#write.csv(wc_s.m,"/Volumes/cbjackson2/language models/cosine_science.csv")
 ```
 
 ```{r models, include = FALSE, cache=TRUE, warning=FALSE}
-# Create dataset for modeling. 
-# Retention =
-#NEED: lang.sim + change.pt + slope  (during newcomer period first four weeks)
-#DONE: lurking period + number of tasks + number of comments + sessions
 
 session_builder_newcomer <- merge(session_builder,
                                   user_info[,c("user_id","newcomer_end","retained")], by="user_id")
 
-session_builder_newcomer$n_period <- ifelse(session_builder_newcomer$created_at<=session_builder_newcomer$newcomer_end,1,0)
+session_builder_newcomer$n_period <- ifelse(session_builder_newcomer$created_at2<=session_builder_newcomer$newcomer_end,1,0)
 
 
 session_builder_newcomer <- session_builder_newcomer[which(session_builder_newcomer$n_period==1),]
@@ -227,14 +229,14 @@ newcomer_info <- session_builder_newcomer %>%
    summarise(
    newcomer_class = length(which(type=="classification")),
    newcomer_comment = length(which(type=="comment")),
-   join_date = min(created_at),
-   newcomer_recent_date = max(created_at),
+   join_date = min(created_at2),
+   newcomer_recent_date = max(created_at2),
    newcomer_sessions = length(unique(session)),
-   newcomer_weeks = length(unique(floor_date(created_at, "week"))),
-   newcomer_days = length(unique(floor_date(created_at, "days"))),
-   newcomer_comment_weeks = length(unique(floor_date(created_at, "week")[which(type=="comment")])),
+   newcomer_weeks = length(unique(floor_date(created_at2, "week"))),
+   newcomer_days = length(unique(floor_date(created_at2, "days"))),
+   newcomer_comment_weeks = length(unique(floor_date(created_at2, "week")[which(type=="comment")])),
 
-   newcomer_comment_days = length(unique(floor_date(created_at, "days")[which(type=="comment")])),
+   newcomer_comment_days = length(unique(floor_date(created_at2, "days")[which(type=="comment")])),
    newcomer_first_comment_seq = min(act_seq[which(type=="comment")]),
    newcomer_first_comment_ses = min(session[which(type=="comment")]))
 
@@ -248,28 +250,28 @@ newcomer_info <- merge(newcomer_info,user_info[,c("user_id","class","comment","r
 newcomer_info <- merge(newcomer_info,user_lan[,c(1:13)],by="user_id",all.x=TRUE )
 newcomer_info$retained <- ifelse(newcomer_info$class > newcomer_info$newcomer_class,1,0)
 
-## ## ## ## ## ## ## ## ## ## ## ## ## 
-## HOW TO LIMIT WINDOW OF NEWCOMERS? 
 
-newcomer_info_commenters <- newcomer_info[which(newcomer_info$newcomer_weeks >= 2 & newcomer_info$newcomer_comment>=1),]
+#### INFO BY WEEK 
+newcomer_week_info <- session_builder_newcomer %>% 
+   group_by(user_id = as.factor(user_id),week=floor_date(created_at2, "week")) %>%  
+   summarise(
+   week_class = length(which(type=="classification")),
+   week_comment = length(which(type=="comment")),
+   newcomer_week_sessions = length(unique(session)),
+   newcomer_week_days = length(unique(floor_date(created_at2, "days"))),
+   newcomer_week_comment_days = length(unique(floor_date(created_at2, "days")[which(type=="comment")]))
+   )
 
-# Change and actual similarity score
+newcomer_week_info <- newcomer_week_info[order(newcomer_week_info$user_id,newcomer_week_info$week),]
+newcomer_week_info <- data.table(newcomer_week_info)
+newcomer_week_info <- newcomer_week_info[,user_week := sequence(.N), by = c("user_id")] # order of events
+
+
+newcomer_week_info <- data.frame(newcomer_week_info)
+write.csv(newcomer_week_info,"/Volumes/cbjackson2/language models/newcomer_week_info.csv")
+
 ```
 
 
 
-## Science cosine language
 
-```{r}
-wc_s.m.real
-wc_s.m.comment
-```
-
-## Domain cosine language
-
-```{r}
-wc_d.m.real
-wc_d.m.comment
-```
-
-#<https://m-clark.github.io/mixed-models-with-R/introduction.html>

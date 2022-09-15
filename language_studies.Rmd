@@ -32,7 +32,10 @@ launch_date <- as.POSIXct("2016-10-12 12:00:00",  format="%Y-%m-%d %H:%M:%S")
 
 newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv")
 newcomers_data <- newcomers_data[,-1]
-
+newcomers_week_data <-  read_csv("/Volumes/cbjackson2/language models/newcomer_week_info.csv") 
+newcomers_week_data <- data.frame(newcomers_week_data)
+newcomers_week_data$week <- as.Date(newcomers_week_data$week)
+newcomers_week_data$user_id <- as.factor(newcomers_week_data$user_id)
 comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.csv") 
 
 # Add newcomer comment features to newcomers_data
@@ -49,16 +52,30 @@ comment_summary <- comments %>%
             words = sum(words)
   )
 
+
+comment_week_summary <- comments %>% 
+  group_by(user_id=as.factor(comment_user_id), week=floor_date(created_at, "week")) %>%
+  summarise(comment_no=length(comment_id),
+            questions = sum(questions),
+            replies = sum(replies),
+            links = sum(links),
+            words = sum(words)
+  )
+comment_week_summary <- data.frame(comment_week_summary)
+comment_week_summary <- comment_week_summary[order(comment_week_summary$user_id,comment_week_summary$week),]
+comment_week_summary <- as.data.table(comment_week_summary)[, comment_week := 1:.N,, by = list(user_id)] 
+comment_week_summary <- data.frame(comment_week_summary)
+ 
 newcomers_data <- merge(newcomers_data,comment_summary, by="user_id",all.x = TRUE)
-newcomers_data$Class <- as.factor(newcomers_data$retained)
 newcomers_data$since_start <- round(as.numeric(difftime(newcomers_data$join_date,launch_date,units = "days")),digits = 0)
+newcomers_data$Class <- as.factor(newcomers_data$retained)
+
 newcomers_data_org <- newcomers_data
 
 
 remove(comments,comment_summary)
 #newcomers_data <- newcomers_data_org
 newcomers_data <- newcomers_data[which(newcomers_data$join_date >= launch_date),] # removed 1096 users who were around prior to launch
-
 
 ### Build Cosine dataset
 domain_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_domain.csv") 
@@ -71,8 +88,17 @@ names(cosine)[c(5:9)] <- c("real_week","comment_week","last_session","science_co
 
 # Get only newcomer cosine information
 newcomers_period <-  newcomers_data[,c(1,9)]
+
 cosine <- merge(cosine,newcomers_period,by="user_id")
 cosine <- cosine[which(cosine$comment_week <= cosine$newcomer_comment_weeks),]
+
+newcomers_week_data <- merge(newcomers_week_data,comment_week_summary,by=c("user_id","week"),all.x=TRUE)
+newcomers_week_data <- merge(newcomers_week_data,cosine,by.x=c("user_id","user_week"),by.y=c("user_id","real_week"),all.x=TRUE)
+newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
+newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_week<=4 & !is.na(newcomers_week_data$comment_no)),]
+
+
+## SOME USERS ACTUALLY HAVE COMMENTS DURING WEEKS BUT NOT STATS. PERHAPS ISSUE WITH PREVIOUS COMPUTATION OF CREATED_AT and TZ ISSUE
 ```
 
 ```{r modelsrun, echo=FALSE}
@@ -94,7 +120,7 @@ traindown <-downSample(x=train_down[,-ncol(train_down)],
                   y=train_down$Class)
 
 # Both classes are equal
-
+set.seed(23243)
 retentiondown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = traindown, family="binomial") # MODEL
 
 logit2prob(coef(retentiondown.glm)) #coefficients
@@ -179,12 +205,16 @@ predictcommenter.down <- as.integer(predictcommenter.down>0.5)
 confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
 
 ### SIMILARITY MODEL
-
+week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
 #Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
+
 
 
 ```
 
-## What impact does language simialrity have on retention
-## What impact does behaviors have on similarity
+
+```{r}
+stargazer(retentiondown.glm, retention_commentersup.glm, type = "latex")
+```
+
 
