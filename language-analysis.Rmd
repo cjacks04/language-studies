@@ -272,6 +272,14 @@ write.csv(newcomer_week_info,"/Volumes/cbjackson2/language models/newcomer_week_
 
 ```
 
+```{r}
+#### Community information by week
+
+
+
+
+```
+
 
 
 
