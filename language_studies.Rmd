@@ -40,7 +40,9 @@ comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.
 
 # Add newcomer comment features to newcomers_data
 comments <- merge(comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
-comments$include <- ifelse(comments$comment_created_at <= comments$join_date + lubridate::days(30),1,0)
+
+
+comments$include <- ifelse(comments$comment_created_at <= add_with_rollback(comments$join_date, months(3), roll_to_first = TRUE),1,0)
 comments <- comments[which(comments$include==1),]
 
 comment_summary <- comments %>% 
@@ -68,14 +70,10 @@ comment_week_summary <- data.frame(comment_week_summary)
  
 newcomers_data <- merge(newcomers_data,comment_summary, by="user_id",all.x = TRUE)
 newcomers_data$since_start <- round(as.numeric(difftime(newcomers_data$join_date,launch_date,units = "days")),digits = 0)
-newcomers_data$Class <- as.factor(newcomers_data$retained)
-
 newcomers_data_org <- newcomers_data
-
-
 remove(comments,comment_summary)
-#newcomers_data <- newcomers_data_org
-newcomers_data <- newcomers_data[which(newcomers_data$join_date >= launch_date),] # removed 1096 users who were around prior to launch
+
+#newcomers_data <- newcomers_data[which(newcomers_data$join_date >= as.Date(launch_date)),] # removed 1096 users who were around prior to launch
 
 ### Build Cosine dataset
 domain_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_domain.csv") 
@@ -95,9 +93,12 @@ cosine <- cosine[which(cosine$comment_week <= cosine$newcomer_comment_weeks),]
 newcomers_week_data <- merge(newcomers_week_data,comment_week_summary,by=c("user_id","week"),all.x=TRUE)
 newcomers_week_data <- merge(newcomers_week_data,cosine,by.x=c("user_id","user_week"),by.y=c("user_id","real_week"),all.x=TRUE)
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
-newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_week<=4 & !is.na(newcomers_week_data$comment_no)),]
+newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_week<=12 & !is.na(newcomers_week_data$comment_no)),]
 
+newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","science_cosine","comment_week")],
+                                  by.x=c("user_id","newcomer_comment_weeks"),by.y = c("user_id","comment_week"))
 
+newcomers_data$Class <- as.factor(newcomers_data$retained)
 ## SOME USERS ACTUALLY HAVE COMMENTS DURING WEEKS BUT NOT STATS. PERHAPS ISSUE WITH PREVIOUS COMPUTATION OF CREATED_AT and TZ ISSUE
 ```
 
@@ -162,8 +163,10 @@ confusionMatrix(as.factor(predict.up),valid_up$Class)
 ##### UPSAMPLING
 
 # Get only users who actually commented during the newcomer period
+
 newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
 newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
+
 
 
 trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
@@ -176,7 +179,7 @@ valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
 traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
                   y=train_commenter_up$Class)
 
-retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
+retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
 
 logit2prob(coef(retention_commentersup.glm)) #coefficients
 nagelkerke(retention_commentersup.glm) # performance measures
@@ -195,7 +198,7 @@ valid_commenter_down <- newcomer_info_commenters[-trainIndex_commenter,]
 
 traincommenterdown<-upSample(x=train_commenter_down[,-ncol(train_commenter_down)],y=train_commenter_down$Class)
 
-retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
+retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
 
 logit2prob(coef(retention_commentersdown.glm)) #coefficients
 nagelkerke(retention_commentersdown.glm) # performance measures
@@ -207,14 +210,11 @@ confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
 ### SIMILARITY MODEL
 week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
 #Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
-
-
-
 ```
 
 
-```{r}
-stargazer(retentiondown.glm, retention_commentersup.glm, type = "latex")
+```{r results='asis'}
+stargazer(retentiondown.glm, retention_commentersup.glm, type = "html")
 ```
 
 
