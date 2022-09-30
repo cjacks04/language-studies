@@ -1,6 +1,8 @@
 ---
 title: "Language_Analysis"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 date: "2022-09-08"
 ---
 
@@ -22,7 +24,9 @@ library(nlme)
 library(stargazer)
 library(caret)
 library(rcompanion)
+library(tm)
 library(performance)
+library(tidytext)
 #Functions
 logit2prob <- function(logit){
   odds <- exp(logit)
@@ -87,7 +91,7 @@ comment_week_summary <- data.frame(comment_week_summary)
 newcomers_data <- merge(newcomers_data,comment_summary, by="user_id",all.x = TRUE)
 newcomers_data$since_start <- round(as.numeric(difftime(newcomers_data$join_date,launch_date,units = "days")),digits = 0)
 newcomers_data_org <- newcomers_data
-remove(comments,comment_summary)
+remove(comment_summary)
 
 #newcomers_data <- newcomers_data[which(newcomers_data$join_date >= as.Date(launch_date)),] # removed 1096 users who were around prior to launch
 
@@ -118,6 +122,23 @@ newcomers_data$Class <- as.factor(newcomers_data$retained)
 
 ## SOME USERS ACTUALLY HAVE COMMENTS DURING WEEKS BUT NOT STATS. PERHAPS ISSUE WITH PREVIOUS COMPUTATION OF CREATED_AT and TZ ISSUE
 ```
+
+```{r, eval=FALSE}
+# Import words
+
+
+ggplot(data=word_use, aes(x=as.Date(firstuse))) + 
+                  #geom_line(stat="bin",size=.7,color="#56B4E9") + 
+  geom_smooth(stat="bin",size=.7,color="#56B4E9") +
+    labs(x="Month",y="New Terms") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="2 month") + theme_classic() +  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position="bottom", legend.title = element_blank()) + 
+geom_vline(aes(xintercept=as.Date("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+
+```
+
+
 
 ```{r, allusersmodels, echo=FALSE, include=FALSE, warning=FALSE}
 
@@ -183,7 +204,7 @@ valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
 traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
                   y=train_commenter_up$Class)
 
-retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
+retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
 
 ##### DOWNSAMPLING
 # trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
@@ -211,11 +232,21 @@ week_model$comment_week <- as.factor(week_model$comment_week)
 
 domain_model.lme <- lme(domain_cosine ~ week_class +week_comment + questions + links + words + last_session , random = ~ 1|user_id, data = week_model,method = "REML")
 
+domain_modelchange.lme <- lme(domain_change ~ week_class +week_comment + questions + links + words + last_session , random = ~ 1|user_id, data = week_model,method = "REML")
+
+
 domain_model.lmer <- lmer(domain_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
+
+domain_modelchange.lmer <- lmer(domain_change ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
 
 science_model.lme <- lme(science_cosine ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
 
+science_modelchange.lme <- lme(science_change ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
+
+
 science_model.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
+
+science_modelchange.lmer <- lmer(science_change ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
 #OUTCOMES ARE EXACTLY THE SAME
 ```
 

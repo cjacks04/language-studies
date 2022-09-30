@@ -73,7 +73,7 @@ comments$replies <- stringr::str_count(comments$comment_body, "> In reply to")
 comments$links <- stringr::str_count(comments$comment_body, "http")
 comments$words <- stringr::str_count(comments$comment_body, "\\w+")
 
-write.csv(comments,"/Volumes/cbjackson2/language models/comments_newcomer_add.csv")
+#write.csv(comments,"/Volumes/cbjackson2/language models/comments_newcomer_add.csv")
 ```
 
 ```{r setup-classifications, include = FALSE, cache=TRUE, warning=FALSE}
@@ -138,9 +138,6 @@ user_info <- session_builder %>%
    newcomer_end = add_with_rollback(join_date, months(3), roll_to_first = TRUE),
    retained=ifelse(recent_date>newcomer_end,1,0)
    )
-
-
-
 ```
 
 ```{r setup-domain, include = FALSE, cache=TRUE, warning=FALSE}
@@ -209,8 +206,8 @@ wc_d.m.comment <- ggplot(wc_d.m, aes(x = commentweek, y = value)) + # plot cosin
       theme_ipsum() +
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
 
-#write.csv(wc_d.m,"/Volumes/cbjackson2/language models/cosine_domain.csv")
-#write.csv(wc_s.m,"/Volumes/cbjackson2/language models/cosine_science.csv")
+write.csv(wc_d.m,"/Volumes/cbjackson2/language models/cosine_domain.csv")
+write.csv(wc_s.m,"/Volumes/cbjackson2/language models/cosine_science.csv")
 ```
 
 ```{r models, include = FALSE, cache=TRUE, warning=FALSE}

@@ -1,0 +1,97 @@
+---
+title: "Community Words"
+author: "Corey Jackson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(reshape2)
+library(hrbrthemes)
+library(scales)
+library(ggsci)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(lubridate)
+library(lme4)
+library(nlme)
+library(stargazer)
+library(caret)
+library(rcompanion)
+library(tm)
+library(performance)
+library(tidytext)
+library(qdapDictionaries)
+
+domainwords <- scan("/Volumes/cbjackson2/language models/domain_science_words.txt", character(), quote = "")
+sciencewords <- scan("/Volumes/cbjackson2/language models/astronomy_words.txt", character(), quote = "")
+
+comments_total <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/gravityspy/gravity-spy-comments_2022-07-15.csv") # move to Zoonvierse Datasets folder
+comments_total$created_at <- as.POSIXct(comments_total$comment_created_at , format="%Y-%m-%d %H:%M:%S")
+comments_total <- comments_total[which(comments_total$created_at <= "2022-03-14 15:39:44"),]
+
+comments_total$comment_body <-  gsub("http[[:alnum:][:punct:]]*", "", comments_total$comment_body)# remove URLs
+comments_total$comment_body <-  gsub("http[^[:space:]]*", "", comments_total$comment_body) # remove non-ASCII characters
+comments_total$filtered_wordsnew <- tolower(gsub('[[:punct:]]', ' ', comments_total$comment_body))
+#comments_total$filtered_wordsnew <- removeWords(comments_total$filtered_wordsnew, c(stopwords("english"),malletwords))
+
+# remove deleted comments because they only contained stopwords
+comments_total <- comments_total[!(comments_total$filtered_wordsnew  %in% c(""," ","  ","   ","    ","     ","      ")), ]
+comments_total <- comments_total[which(!comments_total$comment_id %in% c("292084","294846","392683","1789131","761271","1842842","1292067","970457","927992","842761","717192","513114","314034","123264")),]
+comments_total <- as.data.frame(comments_total)
+
+#rename old comment column
+comments_total$filtered_words <- NULL
+comments_total$filtered_words <- comments_total$filtered_wordsnew
+comments_total$filtered_wordsnew <- NULL
+
+# parse comment and hashtag datasets to unigrams
+unigram_comments <- comments_total %>% unnest_tokens(unigram, 
+                                               filtered_words, token = "ngrams", n = 1)
+
+unigram_comments_tally <- unigram_comments
+unigram_comments_tally <- unigram_comments_tally %>% group_by(week=floor_date(comment_created_at, "week"))
+unigram_comments_tally$week <- as.Date(unigram_comments_tally$week)
+
+tally_words_week <- unigram_comments_tally %>% 
+  group_by(week,unigram) %>%
+    summarise(uses = n(), users = n_distinct(comment_user_login))
+
+word_first_use <- unigram_comments %>% group_by(unigram)%>%
+             summarize(
+              uses = length(unigram),
+              firstuse = min(comment_created_at),
+              recentuse = max(comment_created_at),
+              leader = paste0(comment_user_login[which(firstuse==min(comment_created_at))],""),
+              nonleaderuse = length(unigram[which(leader!=comment_user_login)]),
+              nextuse = min(comment_created_at[which(comment_user_login !=leader)]),
+              leaderuserbefore = length(unigram[which(comment_created_at < nextuse)]),
+              uniqueusers = length(unique(comment_user_login))
+              )
+word_first_use <- as.data.frame(word_first_use)
+
+word_use <- word_first_use[which(word_first_use$unigram %in% domainwords | word_first_use$unigram %in% sciencewords),] 
+
+# remove non-English language/dictionay words in science list
+science_words_summary <- word_use[which(word_use$unigram %in% sciencewords),]
+science_words_clean <- science_words_summary$unigram[which(science_words_summary$unigram %in% GradyAugmented)]
+science_words_clean_df <- science_words_summary[which(science_words_summary$unigram %in% GradyAugmented),]
+science_words_clean_df$type <- "science"
+write.table(science_words_clean,"/Volumes/cbjackson2/language models/science_clean.txt")
+
+# remove non-adopted (~10 unique users) in domain
+domain_words_summary <- word_use[which(word_use$unigram %in% domainwords),]
+domain_words_clean <- domain_words_summary$unigram[which(domain_words_summary$uniqueusers >= 10)]
+domain_words_clean_df <- domain_words_summary[which(domain_words_summary$uniqueusers >= 10),]
+domain_words_clean_df$type <- "domain"
+
+## Generate words for language simialrity analysis
+write.table(domain_words_clean,"/Volumes/cbjackson2/language models/domain_clean.txt")
+
+word_use_clean <- rbind(science_words_clean_df,domain_words_clean_df)
+write.csv(word_use_clean,"/Volumes/cbjackson2/language models/worddata/word_use_clean.csv")
+```
+
