@@ -4,7 +4,8 @@ output: html_document
 date: "2022-09-08"
 ---
 
-```{r}
+```{r, echo=FALSE, include=FALSE, warning=FALSE}
+# rmarkdown::render("frget.Rmd")
 # Libraries Needed
 library(reshape2)
 library(hrbrthemes)
@@ -17,15 +18,30 @@ library(readr)
 library(stringr)
 library(lubridate)
 library(lme4)
+library(nlme)
 library(stargazer)
 library(caret)
 library(rcompanion)
-
+library(performance)
 #Functions
 logit2prob <- function(logit){
   odds <- exp(logit)
   prob <- odds / (1 + odds)
   return(prob)
+}
+
+stargazer2 <- function(model, odd.ratio = F, ...) {
+  if(!("list" %in% class(model))) model <- list(model)
+    
+  if (odd.ratio) {
+    coefOR2 <- lapply(model, function(x) exp(coef(x)))
+    seOR2 <- lapply(model, function(x) exp(coef(x)) * summary(x)$coef[, 2])
+    p2 <- lapply(model, function(x) summary(x)$coefficients[, 4])
+    stargazer(model, coef = coefOR2, se = seOR2, p = p2, ...)
+    
+  } else {
+    stargazer(model, ...)
+  }
 }
 launch_date <- as.POSIXct("2016-10-12 12:00:00",  format="%Y-%m-%d %H:%M:%S")
 
@@ -99,10 +115,11 @@ newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","scie
                                   by.x=c("user_id","newcomer_comment_weeks"),by.y = c("user_id","comment_week"))
 
 newcomers_data$Class <- as.factor(newcomers_data$retained)
+
 ## SOME USERS ACTUALLY HAVE COMMENTS DURING WEEKS BUT NOT STATS. PERHAPS ISSUE WITH PREVIOUS COMPUTATION OF CREATED_AT and TZ ISSUE
 ```
 
-```{r modelsrun, echo=FALSE}
+```{r, allusersmodels, echo=FALSE, include=FALSE, warning=FALSE}
 
 # Perhaps zero-inflated (https://stats.oarc.ucla.edu/r/dae/zip/)
 # logistic for adoption (https://rpubs.com/OmaymaS/182726)
@@ -117,19 +134,19 @@ valid_down <- newcomers_data[-trainIndex_down,]
 # Since the data are unbalanced, we need to implement a subsampling method - upsampling, downsampling, or a hybrid method e.g. ROSE, SMOTE. 
 
 ### Downsampling
-traindown <-downSample(x=train_down[,-ncol(train_down)],
-                  y=train_down$Class)
-
-# Both classes are equal
-set.seed(23243)
-retentiondown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = traindown, family="binomial") # MODEL
-
-logit2prob(coef(retentiondown.glm)) #coefficients
-nagelkerke(retentiondown.glm) # performance measures
-
-predict.down <- predict(retentiondown.glm , newdata = valid_down, type = 'response')
-predict.down <- as.integer(predict.down>0.5)
-confusionMatrix(as.factor(predict.down),valid_down$Class)
+# traindown <-downSample(x=train_down[,-ncol(train_down)],
+#                   y=train_down$Class)
+# 
+# # Both classes are equal
+# set.seed(23243)
+# retentiondown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = traindown, family="binomial") # MODEL
+# 
+# logit2prob(coef(retentiondown.glm)) #coefficients
+# nagelkerke(retentiondown.glm) # performance measures
+# 
+# predict.down <- predict(retentiondown.glm , newdata = valid_down, type = 'response')
+# predict.down <- as.integer(predict.down>0.5)
+# confusionMatrix(as.factor(predict.down),valid_down$Class)
 
 
 ### Upsampling
@@ -145,7 +162,81 @@ trainup<-upSample(x=train_up[,-ncol(train_up)],
 
 # Both classes are equal
 retentionup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = trainup, family="binomial") # MODEL
+```
 
+```{r, commentersmodels, echo=FALSE, include=FALSE, warning=FALSE}
+################################
+#   COMMENTERS MODELS          #
+################################
+
+##### UPSAMPLING
+# Get only users who actually commented during the newcomer period
+newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
+newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
+
+trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+train_commenter_up <- newcomer_info_commenters[ trainIndex_commenter,]
+valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
+
+traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
+                  y=train_commenter_up$Class)
+
+retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
+
+##### DOWNSAMPLING
+# trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
+#                                   list = FALSE,
+#                                   times = 1)
+# train_commenter_down <- newcomer_info_commenters[ trainIndex_commenter,]
+# valid_commenter_down <- newcomer_info_commenters[-trainIndex_commenter,]
+# 
+# traincommenterdown <-upSample(x=train_commenter_down[,-ncol(train_commenter_down)],y=train_commenter_down$Class)
+# 
+# retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
+# 
+# logit2prob(coef(retention_commentersdown.glm)) #coefficients
+# nagelkerke(retention_commentersdown.glm) # performance measures
+# 
+# predictcommenter.down <- predict(retention_commentersdown.glm , newdata = valid_commenter_down, type = 'response')
+# predictcommenter.down <- as.integer(predictcommenter.down>0.5)
+# confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
+
+# https://easystats.github.io/performance/ 
+week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
+week_model$week_class <- log(week_model$week_class+1)
+names(week_model)[15] <- "comment_week"
+week_model$comment_week <- as.factor(week_model$comment_week)
+
+domain_model.lme <- lme(domain_cosine ~ week_class +week_comment + questions + links + words + last_session , random = ~ 1|user_id, data = week_model,method = "REML")
+
+domain_model.lmer <- lmer(domain_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
+
+science_model.lme <- lme(science_cosine ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
+
+science_model.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
+#OUTCOMES ARE EXACTLY THE SAME
+```
+
+## Retention models
+```{r mixedmodel2, results = "asis", echo=TRUE, include=TRUE}
+stargazer(retentionup.glm, retention_commentersup.glm, title="Retention Models",star.cutoffs = c(0.05, 0.01, 0.001), dep.var.labels=c("Retained (=1)"),
+          object.names = TRUE,
+          font.size = "small",
+          align = TRUE,
+          omit.stat=c("f", "ser"),
+          column.sep.width = "-8pt",
+          type = "html",
+          t.auto=F, p.auto=F, 
+          report = "vc*",
+           digits=3
+          
+) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
+```
+
+### All retention performance 
+```{r}
 logit2prob(coef(retentionup.glm)) #coefficients
 nagelkerke(retentionup.glm) # performance measures
 
@@ -154,7 +245,7 @@ predict.up <- as.integer(predict.up>0.5)
 confusionMatrix(as.factor(predict.up),valid_up$Class)
 ```
 
-## Does commenting influence retention
+### Commnter retention performance
 ```{r}
 ################################
 #   COMMENTERS MODELS          #
@@ -187,9 +278,9 @@ nagelkerke(retention_commentersup.glm) # performance measures
 predictcommenter.up <- predict(retention_commentersup.glm , newdata = valid_commenter_up, type = 'response')
 predictcommenter.up <- as.integer(predictcommenter.up>0.5)
 confusionMatrix(as.factor(predictcommenter.up),valid_commenter_up$Class)
+```
 
-
-##### DOWNSAMPLING
+```{r }
 trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
                                   list = FALSE,
                                   times = 1)
@@ -213,8 +304,43 @@ week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
 ```
 
 
-```{r results='asis'}
-stargazer(retentiondown.glm, retention_commentersup.glm, type = "html")
+```{r mixedmodel3, results = "asis", echo=TRUE, include=TRUE}
+## Cosine models
+
+stargazer(domain_model.lmer,science_model.lmer, title="Similarity Models (lmer)",star.cutoffs = c(0.05, 0.01, 0.001),
+          object.names = TRUE,
+          font.size = "small",
+          align = TRUE,
+          omit.stat=c("f", "ser"),
+          column.sep.width = "-8pt",
+          type = "html",
+          t.auto=F, p.auto=F, 
+          report = "vc*",
+           digits=3
+          
+) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
+
 ```
+
+
+```{r mixedmodel4, results = "asis", echo=TRUE, include=TRUE}
+stargazer(domain_model.lme,science_model.lme, title="Similarity Models (lme)",star.cutoffs = c(0.05, 0.01, 0.001),
+          object.names = TRUE,
+          font.size = "small",
+          align = TRUE,
+          omit.stat=c("f", "ser"),
+          column.sep.width = "-8pt",
+          type = "html",
+          t.auto=F, p.auto=F, 
+          report = "vc*",
+           digits=3
+          
+) 
+```
+### Science cosine model
+
+### Domain cosine model
+
+
 
 
