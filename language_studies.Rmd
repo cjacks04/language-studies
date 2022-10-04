@@ -1,8 +1,8 @@
 ---
 title: "Language_Analysis"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 date: "2022-09-08"
 ---
 
@@ -125,6 +125,7 @@ newcomers_data$Class <- as.factor(newcomers_data$retained)
 
 ```{r, eval=FALSE}
 # Import words
+word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
 
 
 ggplot(data=word_use, aes(x=as.Date(firstuse))) + 
@@ -265,11 +266,15 @@ stargazer(retentionup.glm, retention_commentersup.glm, title="Retention Models",
 ) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
 
 
-# High change - 1482284 
-# Moderate change 
-# No change
+# Compute a composite change score from first and last weeks of contributing
 
-# Export/send to Tallal (Meet Thursday after 11)
+# Active 11 weeks (High similarity for both science and domain) - 513912 
+# Active 10 weeks (Low similarity for both science and domain) - 1412875 
+# Active 4 weeks (High similarity for both science and domain) - 315840 
+# Active 4 weeks (Low similarity for both science and domain) - 2538 
+# Dropout with high scores - 1692922
+# Dropout with low scores - 2066383
+
 
 ```
 
@@ -375,10 +380,16 @@ stargazer(domain_model.lme,science_model.lme, title="Similarity Models (lme)",st
           
 ) 
 ```
-### Science cosine model
-
-### Domain cosine model
 
 
+```{r, eval=FALSE}
 
+examples <- c("513912","1412875","315840","2538","1692922","2066383")
+newcomers_case <- newcomers_data[which(newcomers_data$user_id %in% examples),]
+comments_case <- comments[which(comments$comment_user_id %in% examples),]
+
+write.csv(newcomers_case,"/Volumes/cbjackson2/language models/narrativecase/newcomers_case.csv")
+write.csv(comments_case,"/Volumes/cbjackson2/language models/narrativecase/comments_case.csv")
+
+```
 
