@@ -1,13 +1,13 @@
 ---
 title: "Language_Analysis"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 date: "2022-09-08"
 ---
 
 ```{r, echo=FALSE, include=FALSE, warning=FALSE}
-# rmarkdown::render("frget.Rmd")
+knitr::opts_chunk$set(error = TRUE)
 # Libraries Needed
 library(reshape2)
 library(hrbrthemes)
@@ -243,7 +243,6 @@ science_model.lme <- lme(science_cosine ~ week_class +week_comment + questions +
 
 science_modelchange.lme <- lme(science_change ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
 
-
 science_model.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
 
 science_modelchange.lmer <- lmer(science_change ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
@@ -264,6 +263,14 @@ stargazer(retentionup.glm, retention_commentersup.glm, title="Retention Models",
            digits=3
           
 ) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
+
+
+# High change - 1482284 
+# Moderate change 
+# No change
+
+# Export/send to Tallal (Meet Thursday after 11)
+
 ```
 
 ### All retention performance 
