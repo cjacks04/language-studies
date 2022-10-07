@@ -127,7 +127,6 @@ newcomers_data$Class <- as.factor(newcomers_data$retained)
 # Import words
 word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
 
-
 ggplot(data=word_use, aes(x=as.Date(firstuse))) + 
                   #geom_line(stat="bin",size=.7,color="#56B4E9") + 
   geom_smooth(stat="bin",size=.7,color="#56B4E9") +
@@ -497,7 +496,7 @@ if(!require(mice)){install.packages("mice")}
 if(!require(Kendall)){install.packages("Kendall")}
 if(!require(trend)){install.packages("trend")}
 #install.packages("funtimes")
-library(funtimes) #https://cran.r-project.org/web/packages/funtimes/funtimes.pdf 
+#library(funtimes) #https://cran.r-project.org/web/packages/funtimes/funtimes.pdf 
 # install.packages(path_to_file, repos = NULL, type="source")
  
 # Examples https://cran.r-project.org/web/packages/funtimes/vignettes/trendtests.html 
@@ -524,8 +523,9 @@ newcomer_growth <-  ggplot(subset(all_comments_week_summary, project_week > 30) 
   scale_y_continuous(labels = function(x) paste0(x, "%")) +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank()) + 
-geom_vline(aes(xintercept=as.Date("2016-10-12")),linetype="dashed", color = "grey22",size=.7) 
+        legend.position="bottom", legend.title = element_blank(),
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold")) 
 
 thread_growth <-  ggplot(subset(all_comments_week_summary, project_week > 30),aes(y=thread_pct_change, x=week)) + 
   geom_line(stat="identity",size=.7) + labs(x="Month",y="") + ggtitle("New threads") + geom_smooth() +
@@ -534,7 +534,9 @@ thread_growth <-  ggplot(subset(all_comments_week_summary, project_week > 30),ae
   scale_y_continuous(labels = function(x) paste0(x, "%")) +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank()) 
+        legend.position="bottom", legend.title = element_blank(),
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold")) 
 
 word_growth <- ggplot(subset(all_comments_week_summary, project_week > 30),aes(y=word_pct_change, x=week)) + 
   geom_line(stat="identity",size=.7) + labs(x="",y="Percentage increase") + ggtitle("New words") + geom_smooth() +
@@ -543,22 +545,22 @@ word_growth <- ggplot(subset(all_comments_week_summary, project_week > 30),aes(y
   scale_y_continuous(labels = function(x) paste0(x, "%")) +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank()) 
+        legend.position="bottom", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold")) 
 
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/word_growth.pdf", width=5, height=5)
+pdf("word_growth.pdf", width=5, height=5)
 word_growth
 dev.off() 
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/thread_growth.pdf", width=5, height=5)
+pdf("thread_growth.pdf", width=5, height=5)
 thread_growth
 dev.off() 
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/newcomer_growth.pdf", width=5, height=5)
+pdf("newcomer_growth.pdf", width=5, height=5)
 newcomer_growth
 dev.off() 
-
-
-
 ```
 
