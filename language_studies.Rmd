@@ -304,6 +304,282 @@ week_pct_comment
 dev.off()
 ```
 
+```{r}
+## Cosine similarity 
+newcomers_week_data$comment_week.y <- NULL
+names(newcomers_week_data)[15] <- "comment_week"
+
+newcomers_week_data$retained <- ifelse(newcomers_week_data$user_id %in% newcomers_data_org$user_id[which(newcomers_data_org$retained==1)],"Retained","Dropout")
+
+####### VIZ BY THE WEEK THAT A NEWCOMER COMMENTED
+
+domain_similarity.viz <- newcomers_week_data %>% 
+group_by(comment_week) %>% 
+summarise(domain_cosine = round(mean(domain_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), domain_cosine, label=domain_cosine)) +
+  geom_col() + 
+  labs(title="Domain similarity", 
+         x="Newcomer week", y = "Domain similarity")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+
+field_similarity.viz <-  newcomers_week_data %>% 
+group_by(comment_week) %>% 
+summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), science_cosine, label=science_cosine)) +
+  geom_col() + 
+  labs("Science similarity",x="Newcomer week", y = "Science similarity")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic()+ 
+    theme(
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+
+domain_similarity_group.viz <-  newcomers_week_data %>% 
+group_by(comment_week, retained) %>% 
+summarise(domain_cosine = round(mean(domain_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), domain_cosine, label=domain_cosine, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Domain similarity", 
+         x="Newcomer week", y = "Domain similarity", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+   theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+
+field_similarity_group.viz <-  newcomers_week_data %>% 
+group_by(comment_week, retained) %>% 
+summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), science_cosine, label=science_cosine, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Science similarity", 
+         x="Newcomer week", y = "Science similarity", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growth.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_similarity.viz,field_similarity.viz, ncol = 2)
+dev.off()
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growth.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_similarity_group.viz,field_similarity_group.viz, ncol = 2)
+dev.off()
+
+
+####### VIZ BY THE NEWCOMERS TENURE WEEK (by comment week order)
+
+domain_similarityUW.viz <- newcomers_week_data %>% 
+group_by(user_week) %>% 
+summarise(domain_cosine = round(mean(domain_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), domain_cosine, label=domain_cosine)) +
+  geom_col() + 
+  labs(title="Domain similarity", 
+         x="Commenting week", y = "Domain similarity")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+
+field_similarityUW.viz <-  newcomers_week_data %>% 
+group_by(user_week) %>% 
+summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), science_cosine, label=science_cosine)) +
+  geom_col() + 
+  labs(title="Science similarity",x="Commenting week", y = "Science similarity")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+domain_similarity_groupUW.viz <-  newcomers_week_data %>% 
+group_by(user_week, retained) %>% 
+summarise(domain_cosine = round(mean(domain_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), domain_cosine, label=domain_cosine, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Domain similarity", 
+         x="Commenting week", y = "Domain similarity", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+field_similarity_groupUW.viz <-  newcomers_week_data %>% 
+group_by(user_week, retained) %>% 
+summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), science_cosine, label=science_cosine, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Science similarity", 
+         x="Commenting week", y = "Science similarity", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growthUW.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_similarityUW.viz,field_similarityUW.viz, ncol = 2)
+dev.off()
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growthUW.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_similarity_groupUW.viz,field_similarity_groupUW.viz, ncol = 2)
+dev.off()
+
+
+####### VIZ BY GAINS NEWCOMERS TENURE (comment_week) WEEK (domain_change, science_change)
+
+domain_change.viz <- newcomers_week_data %>% 
+group_by(comment_week) %>% 
+summarise(domain_change = round(mean(domain_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), domain_change, label=domain_change)) +
+  geom_col() + 
+  labs(title="Domain similarity change", 
+         x="User week", y = "Domain similarity change")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+
+field_change.viz <-  newcomers_week_data %>% 
+group_by(comment_week) %>% 
+summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), science_change, label=science_change)) +
+  geom_col() + 
+  labs("Science similarity change",x="User week", y = "Science similarity change")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+domain_change_group.viz <-  newcomers_week_data %>% 
+group_by(comment_week, retained) %>% 
+summarise(domain_change = round(mean(domain_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), domain_change, label=domain_change, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+   ylim(0,0.05) +
+  labs(title="Domain similarity change", 
+         x="User week", y = "Domain similarity change", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+
+field_change_group.viz <-  newcomers_week_data %>% 
+group_by(comment_week, retained) %>% 
+summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(comment_week), science_change, label=science_change, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+  ylim(0,0.05) +
+  geom_col(position = "dodge") +
+  labs(title="Science similarity change", 
+         x="User week", y = "Science similarity change", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.5, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_change.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_change.viz,field_change.viz, ncol = 2)
+dev.off()
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_change.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_change_group.viz,field_change_group.viz, ncol = 2)
+dev.off()
+
+####### VIZ BY GAINS NEWCOMERS TENURE (by comment week order) WEEK (domain_change, science_change)
+
+domain_changeUW.viz <- newcomers_week_data %>% 
+group_by(user_week) %>% 
+summarise(domain_change = round(mean(domain_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), domain_change, label=domain_change)) +
+  geom_col() + 
+  labs(title="Domain similarity change", 
+         x="Commenting week", y = "Domain similarity change")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+
+field_changeUW.viz <-  newcomers_week_data %>% 
+group_by(user_week) %>% 
+summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), science_change, label=science_change)) +
+  geom_col() + 
+  labs("Science similarity change",x="Commenting week", y = "Science similarity change")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+    theme(
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+domain_change_groupUW.viz <-  newcomers_week_data %>% 
+group_by(user_week, retained) %>% 
+summarise(domain_change = round(mean(domain_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), domain_change, label=domain_change, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Domain similarity change", 
+         x="Commenting week", y = "Domain similarity change", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+
+field_change_groupUW.viz <-  newcomers_week_data %>% 
+group_by(user_week, retained) %>% 
+summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>% 
+  ggplot(aes(factor(user_week), science_change, label=science_change, fill=as.factor(retained))) +
+   geom_bar(stat="identity", position="dodge",preserve = "single")  +  
+   geom_col(position = "dodge") +
+  labs(title="Science similarity change", 
+         x="Commenting week", y = "Science similarity change", fill="Status")+
+   scale_fill_manual(values=c('black','lightgray'))+
+   theme_classic() + 
+     theme(legend.position = c(0.2, 0.8),
+         axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_changeUW.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_changeUW.viz,field_changeUW.viz, ncol = 2)
+dev.off()
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_changeUW.pdf", width=11, height=4)
+#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(domain_change_groupUW.viz,field_change_groupUW.viz, ncol = 2)
+dev.off()
+
+```
+
 
 
 
