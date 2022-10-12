@@ -4,7 +4,10 @@ language-analysis.html
 *.html
 .RData
 language_studies.pdf
+<<<<<<< Updated upstream
 newcomer_growth.pdf
 thread_growth.pdf
 word_growth.pdf
+=======
+>>>>>>> Stashed changes
 zoolearning.pdf
