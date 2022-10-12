@@ -27,6 +27,9 @@ library(rcompanion)
 library(tm)
 library(performance)
 library(tidytext)
+library(gridExtra)
+library(trend)
+library(changepoint)
 #Functions
 logit2prob <- function(logit){
   odds <- exp(logit)
@@ -58,9 +61,9 @@ newcomers_week_data$week <- as.Date(newcomers_week_data$week)
 newcomers_week_data$user_id <- as.factor(newcomers_week_data$user_id)
 comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.csv") 
 
+
 # Add newcomer comment features to newcomers_data
 comments <- merge(comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
-
 
 comments$include <- ifelse(comments$comment_created_at <= add_with_rollback(comments$join_date, months(3), roll_to_first = TRUE),1,0)
 comments <- comments[which(comments$include==1),]
@@ -125,18 +128,183 @@ newcomers_data$Class <- as.factor(newcomers_data$retained)
 
 ```{r, eval=FALSE}
 # Import words
-word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
+domain <- read.table("/Volumes/cbjackson2/language models/domain_clean.txt", quote="\"", comment.char="")
+domain <- c(domain$x)
 
-ggplot(data=word_use, aes(x=as.Date(firstuse))) + 
-                  #geom_line(stat="bin",size=.7,color="#56B4E9") + 
-  geom_smooth(stat="bin",size=.7,color="#56B4E9") +
-    labs(x="Month",y="New Terms") + 
-  scale_x_date(date_labels="%b %y",date_breaks  ="2 month") + theme_classic() +  theme_minimal() +
+field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quote="\"", comment.char="")
+field <- c(field$x)
+
+word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
+word_first_use <- data.frame(read_csv("/Volumes/cbjackson2/language models/worddata/word_first_use.csv"))
+
+word_first_use$type <- ifelse(word_first_use$unigram %in% field,"Field",
+                           ifelse(word_first_use$unigram %in% domain,"Domain","Regular"))
+
+words_month <- word_first_use  %>%  
+  group_by(week=floor_date(firstuse, "week")) %>% 
+  summarize(
+    count =length(unigram)) %>%
+  mutate(
+         agg_growth = cumsum(count),
+         agg_pct = cumsum(count)/sum(count),
+         diff_growth = agg_pct - lag(agg_pct))
+
+# plot community language growth
+lang_growth <- ggplot(words_month, aes(x=as.Date(week), y=agg_pct)) + 
+  geom_line(size=1) + 
+  geom_smooth(size=.7, color="grey") +
+  labs(x="Month",y="Token growth") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
+  theme_classic() + scale_color_nejm() +
+  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank()) + 
-geom_vline(aes(xintercept=as.Date("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+        legend.position="none", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 12, face="bold"),
+        axis.title = element_text(size = 13, face="bold")) + 
+  geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
+  geom_text(aes(x=as.Date("2016-10-11"), label="Project launch", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=5))
+
+
+words_month_type <- word_first_use %>% 
+  group_by(week=floor_date(firstuse, "week"),type) %>% 
+  summarize(
+    count =length(unigram)) 
+
+words_month_type <- data.frame(words_month_type)
+words_month_type <- words_month_type[order(words_month_type$type,words_month_type$week),]
+
+words_month_type <- words_month_type %>%
+  group_by(type) %>% 
+  mutate(
+    agg_growth = cumsum(count),
+    agg_pct = cumsum(count)/sum(count),
+    diff_growth = agg_pct - lag(agg_pct)
+)
+
+type_growth <- ggplot(subset(words_month_type, type %in% c("Field","Domain")), aes(x=as.Date(week), y=agg_pct, group=type)) + 
+  geom_line(size=1, aes(color=type)) + 
+  geom_smooth(size=.7, aes(group=type), color="grey") +
+  labs(x="Month",y="Token growth") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
+  theme_classic() +  scale_color_nejm() +
+  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = c(0.8, 0.2), 
+        legend.key = element_rect(fill = NA, color = NA),
+        legend.title = element_blank(),
+        axis.text = element_text(size = 12, face="bold"),
+        axis.title = element_text(size = 13, face="bold")) +
+  geom_vline(aes(xintercept=as.Date("2016-10-01")), colour="black",size=.5) + 
+  geom_text(aes(x=as.Date("2016-10-11"), label="Project launch", y=.7), colour="grey", angle=90, vjust = -1, text=element_text(size=5))
+  
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+grid.arrange(lang_growth,type_growth, ncol = 2)
+dev.off()
+
+### Stats for community language growth
+sens.slope(words_month$agg_pct, conf.level = 0.95)
+sens.slope(words_month_type$agg_pct[which(words_month_type$type=="Field")], conf.level = 0.95)
+sens.slope(words_month_type$agg_pct[which(words_month_type$type=="Domain")], conf.level = 0.95)
+
+# Change points
+cpt.mean(words_month$count, method = "AMOC")
+
+#https://www.marinedatascience.co/blog/2019/09/28/comparison-of-change-point-detection-methods/
+```
+
+```{r}
+# Comment data
+unigrams <- read_csv("/Volumes/cbjackson2/language models/worddata/unigram_comments.csv") 
+
+# get new threads created 
+threads_commenting <- unigrams %>% 
+  group_by(discussion_id) %>% 
+  summarize(
+    start=min(floor_date(comment_created_at, "week")),
+    comments = length(unique(comment_id)),
+    users = length(unique(comment_user_login))
+    )
+
+threads_commenting_week <- threads_commenting  %>%  
+  group_by(start) %>% 
+  summarize(
+    count=length(discussion_id)) %>%
+  mutate(
+         agg_growth = cumsum(count),
+         agg_pct = cumsum(count)/sum(count),
+         diff_growth = agg_pct - lag(agg_pct))
+
+### Stats for community language growth
+sens.slope(threads_commenting_week$agg_pct, conf.level = 0.95)
 
 ```
+
+
+```{r }
+####### USER GROWTH
+join_summary_week <- newcomers_data_org %>% 
+   group_by(join_date) %>% 
+   summarize(newcomers = length(user_id),
+             newcomer_commenters = length(user_id[which(newcomer_comment >=1)]),
+             percent_commenters = newcomer_commenters/newcomers)
+
+join_summary_week_d <- newcomers_data_org %>% 
+   group_by(join_date) %>% 
+   summarize(newcomers = length(user_id),
+             newcomer_commenters = length(user_id[which(newcomer_comment >=1)]),
+             percent_commenters = newcomer_commenters/newcomers)
+
+
+week_pct_comment <- ggplot(join_summary_week, aes(x=join_date, y=percent_commenters)) + 
+  #geom_line(size=.7,color="#56B4E9") + 
+  geom_smooth(size=.7,color="#56B4E9") +
+  labs(x="Month",y="Language additions") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
+  theme_classic() +  
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position="bottom", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+  geom_vline(aes(xintercept=c("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+
+join_summary_month <- newcomers_data_org %>% 
+   group_by(month=floor_date(join_date, "month")) %>% 
+   summarize(newcomers = length(user_id),
+             newcomer_commenters = length(user_id[which(newcomer_comment >=1)]),
+             percent_commenters = newcomer_commenters/newcomers)
+
+month_pct_comment <-  ggplot(join_summary_month, aes(x=month, y=percent_commenters)) + 
+  #geom_line(size=.7,color="#56B4E9") + 
+  geom_smooth(size=.7,color="#56B4E9") +
+  labs(x="Month-Year",y="Newcomers commentings (%)") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
+  theme_classic() +  
+  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position="bottom", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 14, face="bold"),
+        axis.title = element_text(size = 14, face="bold"))  
+  geom_vline(aes(xintercept=as.Date("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+  
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/community_lang_growth.pdf", width=5, height=5)
+community_lang_growth
+dev.off()
+  
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/month_pct_comment.pdf", width=5, height=5)
+month_pct_comment
+dev.off()
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/week_pct_comment.pdf", width=5, height=5)
+week_pct_comment
+dev.off()
+```
+
+
 
 
 
@@ -376,7 +544,6 @@ stargazer(domain_model.lme,science_model.lme, title="Similarity Models (lme)",st
           t.auto=F, p.auto=F, 
           report = "vc*",
            digits=3
-          
 ) 
 ```
 
@@ -387,180 +554,12 @@ examples <- c("513912","1412875","315840","2538","1692922","2066383")
 newcomers_case <- newcomers_data[which(newcomers_data$user_id %in% examples),]
 comments_case <- comments[which(comments$comment_user_id %in% examples),]
 
+## Count science/domain words in comments 
+comments_case$domain_words <- stringr::str_count(comments_case$comment_body, paste(domain, collapse='|'))
+comments_case$field_words <- stringr::str_count(comments_case$comment_body, paste(field, collapse='|'))
+
 write.csv(newcomers_case,"/Volumes/cbjackson2/language models/narrativecase/newcomers_case.csv")
 write.csv(comments_case,"/Volumes/cbjackson2/language models/narrativecase/comments_case.csv")
 
-```
-
-
-```{r}
-all_comments <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/gravityspy/gravity-spy-comments_2022-07-15.csv") # move to Zoonvierse Datasets folder
-
-malletwords <- scan("/Volumes/cbjackson2/language models/mallet.txt", character(), quote = "")
-
-all_comments$created_at <- as.POSIXct(all_comments$comment_created_at , format="%Y-%m-%d %H:%M:%S")
-all_comments <- all_comments[which(all_comments$created_at <= "2022-03-14 15:39:44"),]
-
-
-# Data transformations
-all_comments$comment_body <-  gsub("http[[:alnum:][:punct:]]*", "", all_comments$comment_body)# remove URLs
-all_comments$comment_body <-  gsub("http[^[:space:]]*", "", all_comments$comment_body) # remove non-ASCII characters
-all_comments$comment_body <-  removeNumbers(all_comments$comment_body) # remove non-ASCII characters
-all_comments$filtered_wordsnew <- tolower(gsub('[[:punct:]]', ' ', all_comments$comment_body))
-all_comments$filtered_wordsnew <- removeWords(all_comments$filtered_wordsnew, c(stopwords("english"),malletwords))
-
-#rename old comment column
-all_comments$filtered_words <- NULL
-all_comments$filtered_words <- all_comments$filtered_wordsnew
-all_comments$filtered_wordsnew <- NULL
-
-# parse comment and hashtag datasets to unigrams
-unigram_comments <- all_comments %>% unnest_tokens(unigram, 
-                                               filtered_words, token = "ngrams", n = 1)
-
-
-
-all_comments_summary <- unigram_comments %>% 
-  #group_by(week=floor_date(comment_created_at, "week")) %>% 
-  summarize(
-    words=length(unigram),
-    words_unique=length(unique(unigram)),
-    threads = length(unique(discussion_id))
-    )
-
-all_comments_week_summary <- unigram_comments %>% 
-  group_by(week=floor_date(comment_created_at, "week")) %>% 
-  summarize(
-    words=length(unigram),
-    words_unique=length(unique(unigram)),
-    commenters=length(unique(comment_user_login)),
-    threads=length(unique(discussion_id))
-    )
-
-# get people joining discussion spaces 
-user_commenting <- all_comments %>% 
-  group_by(comment_user_login) %>% 
-  summarize(
-    week=min(floor_date(comment_created_at, "week")),
-    )
-
-user_commenting_week <- user_commenting  %>%  
-  group_by(week) %>% 
-  summarize(
-    newcomers=length(comment_user_login))
-
-all_comments_week_summary <- merge(all_comments_week_summary,user_commenting_week,by="week",all.x = TRUE)
-remove(user_commenting,user_commenting_week)
-
-# get new threads created 
-threads_commenting <- all_comments %>% 
-  group_by(discussion_id) %>% 
-  summarize(
-    week=min(floor_date(comment_created_at, "week")),
-    )
-threads_commenting_week <- threads_commenting  %>%  
-  group_by(week) %>% 
-  summarize(
-    newthreads=length(discussion_id))
-
-all_comments_week_summary <- merge(all_comments_week_summary,threads_commenting_week,by="week",all.x = TRUE)
-remove(threads_commenting,threads_commenting_week)
-
-# get new words created 
-words_commenting <- unigram_comments %>% 
-  group_by(unigram) %>% 
-  summarize(
-    week=min(floor_date(comment_created_at, "week")),
-    )
-words_commenting_week <- words_commenting  %>%  
-  group_by(week) %>% 
-  summarize(
-    newwords=length(unigram))
-
-all_comments_week_summary <- merge(all_comments_week_summary,words_commenting_week,by="week",all.x = TRUE)
-remove(words_commenting,words_commenting_week)
-
-all_comments_week_summary[is.na(all_comments_week_summary)] <- 0
-
-all_comments_week_summary <-  all_comments_week_summary %>%
-  mutate(newcomer_growth = cumsum(newcomers),
-         newcomer_pct_change = (newcomer_growth/lag(newcomer_growth) - 1) * 100,
-         thread_growth = cumsum(newthreads),
-         thread_pct_change = (thread_growth/lag(thread_growth) - 1) * 100,
-         word_growth = cumsum(newwords),
-         word_pct_change = (word_growth/lag(word_growth) - 1) * 100) 
-
-
-# Visualizations showing community growth analysis
-if(!require(mice)){install.packages("mice")}
-if(!require(Kendall)){install.packages("Kendall")}
-if(!require(trend)){install.packages("trend")}
-#install.packages("funtimes")
-#library(funtimes) #https://cran.r-project.org/web/packages/funtimes/funtimes.pdf 
-# install.packages(path_to_file, repos = NULL, type="source")
- 
-# Examples https://cran.r-project.org/web/packages/funtimes/vignettes/trendtests.html 
-apply(all_comments_week_summary[,c(6:8)], 2, function(x) notrend_test(x)$p.value)
-apply(all_comments_week_summary[,c(6:8)], 2, function(x) notrend_test(x, test = "MK")$p.value)
-apply(all_comments_week_summary[,c(6:8)], 2, function(x) notrend_test(x, test = "WAVK", 
-                                     factor.length = "adaptive.selection")$p.value)
-
-MannKendall(all_comments_week_summary$newcomers)
-MannKendall(all_comments_week_summary$newthreads)
-MannKendall(all_comments_week_summary$newwords)
-
-## Visualizations for community growth
-all_comments_week_summary$project_week <- as.numeric(1:nrow(all_comments_week_summary))
-all_comments_week_summary$week <- as.Date(all_comments_week_summary$week)
-
-# visualizations
-
-
-newcomer_growth <-  ggplot(subset(all_comments_week_summary, project_week > 30) ,aes(y=newcomer_pct_change, x=week)) + 
-  geom_line(stat="identity",size=.7) + labs(x="",y="") + ggtitle("Newcomers") + geom_smooth() +
-  #scale_x_date(date_breaks = "2 weeks", date_labels = "%W") +
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") +  
-  scale_y_continuous(labels = function(x) paste0(x, "%")) +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank(),
-        axis.text = element_text(size = 14, face="bold"),
-        axis.title = element_text(size = 14, face="bold")) 
-
-thread_growth <-  ggplot(subset(all_comments_week_summary, project_week > 30),aes(y=thread_pct_change, x=week)) + 
-  geom_line(stat="identity",size=.7) + labs(x="Month",y="") + ggtitle("New threads") + geom_smooth() +
-  #scale_x_date(date_breaks = "2 weeks", date_labels = "%W") +
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") +  
-  scale_y_continuous(labels = function(x) paste0(x, "%")) +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", legend.title = element_blank(),
-        axis.text = element_text(size = 14, face="bold"),
-        axis.title = element_text(size = 14, face="bold")) 
-
-word_growth <- ggplot(subset(all_comments_week_summary, project_week > 30),aes(y=word_pct_change, x=week)) + 
-  geom_line(stat="identity",size=.7) + labs(x="",y="Percentage increase") + ggtitle("New words") + geom_smooth() +
-  #scale_x_date(date_breaks = "2 weeks", date_labels = "%W") +
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") +  
-  scale_y_continuous(labels = function(x) paste0(x, "%")) +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 14, face="bold"),
-        axis.title = element_text(size = 14, face="bold")) 
-
-
-pdf("word_growth.pdf", width=5, height=5)
-word_growth
-dev.off() 
-
-pdf("thread_growth.pdf", width=5, height=5)
-thread_growth
-dev.off() 
-
-pdf("newcomer_growth.pdf", width=5, height=5)
-newcomer_growth
-dev.off() 
 ```
 
