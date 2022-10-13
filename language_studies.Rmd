@@ -123,7 +123,12 @@ newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","scie
 
 newcomers_data$Class <- as.factor(newcomers_data$retained)
 
-## SOME USERS ACTUALLY HAVE COMMENTS DURING WEEKS BUT NOT STATS. PERHAPS ISSUE WITH PREVIOUS COMPUTATION OF CREATED_AT and TZ ISSUE
+# remove those who would not have a chance to represent as a newcomer in our data
+newcomers_data$newcomer_chance <- ifelse(newcomers_data$join_date <= add_with_rollback(as.Date("2022-03-14"), months(-3), roll_to_first = TRUE),1,0) 
+#98 people did not have opportunity to become newcomer
+
+newcomers_data <- newcomers_data[which(newcomers_data$newcomer_chance==1),]
+newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
 ```
 
 ```{r, eval=FALSE}
@@ -221,14 +226,14 @@ unigrams <- read_csv("/Volumes/cbjackson2/language models/worddata/unigram_comme
 threads_commenting <- unigrams %>% 
   group_by(discussion_id) %>% 
   summarize(
-    start=min(floor_date(comment_created_at, "week")),
+    week = min(floor_date(comment_created_at, "week")),
     comments = length(unique(comment_id)),
-    users = length(unique(comment_user_login)),
-    starter = paste0(comment_user_login[which(min(comment_created_at))])
+    users = length(unique(comment_user_id)),
+    starter = unique(comment_user_id[which(comment_created_at == min(comment_created_at))])
     )
 
 threads_commenting_week <- threads_commenting  %>%  
-  group_by(start) %>% 
+  group_by(week) %>% 
   summarize(
     count=length(discussion_id)) %>%
   mutate(
@@ -236,9 +241,20 @@ threads_commenting_week <- threads_commenting  %>%
          agg_pct = cumsum(count)/sum(count),
          diff_growth = agg_pct - lag(agg_pct))
 
-### Stats for community language growth
-sens.slope(threads_commenting_week$agg_pct, conf.level = 0.95)
+threads_user <- threads_commenting  %>%  
+  group_by(user_id=starter,week) %>% 
+   summarize(
+    start_count=length(discussion_id))
 
+newcomers_week_data <- merge(newcomers_week_data,threads_user, by=c("user_id","week"), all.x = TRUE)
+newcomers_week_data$start_count[is.na(newcomers_week_data$start_count)] <- 0
+
+newcomer_threads_user <- newcomers_week_data  %>%  
+  group_by(user_id) %>% 
+   summarize(
+    start_count=sum(start_count))
+
+newcomers_data <-  merge(newcomers_data,newcomer_threads_user, by=c("user_id"), all.x = TRUE)
 ```
 
 
@@ -578,57 +594,8 @@ pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www2
 #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
 grid.arrange(domain_change_groupUW.viz,field_change_groupUW.viz, ncol = 2)
 dev.off()
-
 ```
 
-
-
-
-
-```{r, allusersmodels, echo=FALSE, include=FALSE, warning=FALSE}
-
-# Perhaps zero-inflated (https://stats.oarc.ucla.edu/r/dae/zip/)
-# logistic for adoption (https://rpubs.com/OmaymaS/182726)
-trainIndex_down <- createDataPartition(newcomers_data$Class, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train_down <- newcomers_data[ trainIndex_down,]
-valid_down <- newcomers_data[-trainIndex_down,]
-
-# ~2900 retained and ~16k dropout
-
-# Since the data are unbalanced, we need to implement a subsampling method - upsampling, downsampling, or a hybrid method e.g. ROSE, SMOTE. 
-
-### Downsampling
-# traindown <-downSample(x=train_down[,-ncol(train_down)],
-#                   y=train_down$Class)
-# 
-# # Both classes are equal
-# set.seed(23243)
-# retentiondown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = traindown, family="binomial") # MODEL
-# 
-# logit2prob(coef(retentiondown.glm)) #coefficients
-# nagelkerke(retentiondown.glm) # performance measures
-# 
-# predict.down <- predict(retentiondown.glm , newdata = valid_down, type = 'response')
-# predict.down <- as.integer(predict.down>0.5)
-# confusionMatrix(as.factor(predict.down),valid_down$Class)
-
-
-### Upsampling
-trainIndex_up <- createDataPartition(newcomers_data$Class, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train_up <- newcomers_data[ trainIndex_up,]
-valid_up <- newcomers_data[-trainIndex_up,]
-
-
-trainup<-upSample(x=train_up[,-ncol(train_up)],
-                  y=train_up$Class)
-
-# Both classes are equal
-retentionup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+since_start, data = trainup, family="binomial") # MODEL
-```
 
 ```{r, commentersmodels, echo=FALSE, include=FALSE, warning=FALSE}
 ################################
@@ -640,6 +607,8 @@ retentionup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions
 newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
 newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
 
+newcomer_info_commenters <- newcomer_info_commenters[,c(1:39,41,42,40)]
+
 trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
                                   list = FALSE,
                                   times = 1)
@@ -649,7 +618,7 @@ valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
 traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
                   y=train_commenter_up$Class)
 
-retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
+retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses+start_count,data = traincommenterup,family="binomial")
 
 ##### DOWNSAMPLING
 # trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
@@ -675,23 +644,10 @@ week_model$week_class <- log(week_model$week_class+1)
 names(week_model)[15] <- "comment_week"
 week_model$comment_week <- as.factor(week_model$comment_week)
 
-domain_model.lme <- lme(domain_cosine ~ week_class +week_comment + questions + links + words + last_session , random = ~ 1|user_id, data = week_model,method = "REML")
+# Science cosine and change
+science.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + week + (1|user_id) , data = week_model,REML=FALSE)
 
-domain_modelchange.lme <- lme(domain_change ~ week_class +week_comment + questions + links + words + last_session , random = ~ 1|user_id, data = week_model,method = "REML")
 
-
-domain_model.lmer <- lmer(domain_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
-
-domain_modelchange.lmer <- lmer(domain_change ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
-
-science_model.lme <- lme(science_cosine ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
-
-science_modelchange.lme <- lme(science_change ~ week_class +week_comment + questions + links + words + last_session, random = ~ 1|user_id, data = week_model,method = "REML")
-
-science_model.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
-
-science_modelchange.lmer <- lmer(science_change ~ week_class +week_comment + questions + links + words + last_session + (1|user_id), data = week_model,REML=FALSE)
-#OUTCOMES ARE EXACTLY THE SAME
 ```
 
 ## Retention models
