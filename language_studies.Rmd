@@ -223,7 +223,8 @@ threads_commenting <- unigrams %>%
   summarize(
     start=min(floor_date(comment_created_at, "week")),
     comments = length(unique(comment_id)),
-    users = length(unique(comment_user_login))
+    users = length(unique(comment_user_login)),
+    starter = paste0(comment_user_login[which(min(comment_created_at))])
     )
 
 threads_commenting_week <- threads_commenting  %>%  
