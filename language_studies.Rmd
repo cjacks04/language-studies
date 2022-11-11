@@ -62,6 +62,19 @@ newcomers_week_data$user_id <- as.factor(newcomers_week_data$user_id)
 comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.csv") 
 
 
+# Import words
+domain <- read.table("/Volumes/cbjackson2/language models/domain_clean.txt", quote="\"", comment.char="")
+domain <- c(domain$x)
+
+field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quote="\"", comment.char="")
+field <- c(field$x)
+
+# Add comment features
+comments$tags <- stringr::str_count(comments$comment_body, "\\#") 
+comments$user_references <- stringr::str_count(comments$comment_body, "\\@") 
+comments$domain_words <- stringr::str_count(comments$comment_body, paste(domain, collapse='|'))
+comments$field_words <- stringr::str_count(comments$comment_body, paste(field, collapse='|'))
+
 # Add newcomer comment features to newcomers_data
 comments <- merge(comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
 
@@ -74,7 +87,11 @@ comment_summary <- comments %>%
             questions = sum(questions),
             replies = sum(replies),
             links = sum(links),
-            words = sum(words)
+            words = sum(words),
+            tags = sum(tags),
+            user_references = sum(user_references),
+            domain_words = sum(domain_words),
+            field_words = sum(field_words)
   )
 
 
@@ -84,8 +101,13 @@ comment_week_summary <- comments %>%
             questions = sum(questions),
             replies = sum(replies),
             links = sum(links),
-            words = sum(words)
+            words = sum(words),
+            tags = sum(tags),
+            user_references = sum(user_references),
+            domain_words = sum(domain_words),
+            field_words = sum(field_words)
   )
+
 comment_week_summary <- data.frame(comment_week_summary)
 comment_week_summary <- comment_week_summary[order(comment_week_summary$user_id,comment_week_summary$week),]
 comment_week_summary <- as.data.table(comment_week_summary)[, comment_week := 1:.N,, by = list(user_id)] 
@@ -121,23 +143,23 @@ newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_week<=
 newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","science_cosine","comment_week")],
                                   by.x=c("user_id","newcomer_comment_weeks"),by.y = c("user_id","comment_week"))
 
-newcomers_data$Class <- as.factor(newcomers_data$retained)
+newcomers_data$Class <- as.factor(newcomers_data$retained) # 2610 
 
 # remove those who would not have a chance to represent as a newcomer in our data
 newcomers_data$newcomer_chance <- ifelse(newcomers_data$join_date <= add_with_rollback(as.Date("2022-03-14"), months(-3), roll_to_first = TRUE),1,0) 
 #98 people did not have opportunity to become newcomer
 
 newcomers_data <- newcomers_data[which(newcomers_data$newcomer_chance==1),]
+newcomers_data <- newcomers_data[which(newcomers_data$since_start>=0),]
+
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
 ```
 
-```{r, eval=FALSE}
-# Import words
-domain <- read.table("/Volumes/cbjackson2/language models/domain_clean.txt", quote="\"", comment.char="")
-domain <- c(domain$x)
 
-field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quote="\"", comment.char="")
-field <- c(field$x)
+
+
+```{r, eval=FALSE}
+
 
 word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
 word_first_use <- data.frame(read_csv("/Volumes/cbjackson2/language models/worddata/word_first_use.csv"))
@@ -203,9 +225,9 @@ type_growth <- ggplot(subset(words_month_type, type %in% c("Field","Domain")), a
   geom_vline(aes(xintercept=as.Date("2016-10-01")), colour="black",size=.5) + 
   geom_text(aes(x=as.Date("2016-10-11"), label="Project launch", y=.7), colour="grey", angle=90, vjust = -1, text=element_text(size=5))
   
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(lang_growth,type_growth, ncol = 2)
-dev.off()
+# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(lang_growth,type_growth, ncol = 2)
+# dev.off()
 
 ### Stats for community language growth
 sens.slope(words_month$agg_pct, conf.level = 0.95)
@@ -255,6 +277,9 @@ newcomer_threads_user <- newcomers_week_data  %>%
     start_count=sum(start_count))
 
 newcomers_data <-  merge(newcomers_data,newcomer_threads_user, by=c("user_id"), all.x = TRUE)
+
+
+
 ```
 
 
@@ -308,23 +333,24 @@ month_pct_comment <-  ggplot(join_summary_month, aes(x=month, y=percent_commente
   geom_vline(aes(xintercept=as.Date("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
   
 
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/community_lang_growth.pdf", width=5, height=5)
-community_lang_growth
-dev.off()
-  
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/month_pct_comment.pdf", width=5, height=5)
-month_pct_comment
-dev.off()
-
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/week_pct_comment.pdf", width=5, height=5)
-week_pct_comment
-dev.off()
+# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/community_lang_growth.pdf", width=5, height=5)
+# community_lang_growth
+# dev.off()
+#   
+# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/month_pct_comment.pdf", width=5, height=5)
+# month_pct_comment
+# dev.off()
+# 
+# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/week_pct_comment.pdf", width=5, height=5)
+# week_pct_comment
+# dev.off()
 ```
+
 
 ```{r}
 ## Cosine similarity 
 newcomers_week_data$comment_week.y <- NULL
-names(newcomers_week_data)[15] <- "comment_week"
+names(newcomers_week_data)[19] <- "comment_week"
 
 newcomers_week_data$retained <- ifelse(newcomers_week_data$user_id %in% newcomers_data_org$user_id[which(newcomers_data_org$retained==1)],"Retained","Dropout")
 
@@ -384,15 +410,15 @@ summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>%
          axis.text = element_text(size = 14, face="bold"),
         axis.title = element_text(size = 14, face="bold"))
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growth.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_similarity.viz,field_similarity.viz, ncol = 2)
-dev.off()
-
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growth.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_similarity_group.viz,field_similarity_group.viz, ncol = 2)
-dev.off()
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growth.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_similarity.viz,field_similarity.viz, ncol = 2)
+# dev.off()
+# 
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growth.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_similarity_group.viz,field_similarity_group.viz, ncol = 2)
+# dev.off()
 
 
 ####### VIZ BY THE NEWCOMERS TENURE WEEK (by comment week order)
@@ -450,15 +476,15 @@ summarise(science_cosine = round(mean(science_cosine, na.rm=TRUE),digits=2)) %>%
          axis.text = element_text(size = 14, face="bold"),
         axis.title = element_text(size = 14, face="bold"))
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growthUW.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_similarityUW.viz,field_similarityUW.viz, ncol = 2)
-dev.off()
-
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growthUW.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_similarity_groupUW.viz,field_similarity_groupUW.viz, ncol = 2)
-dev.off()
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_growthUW.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_similarityUW.viz,field_similarityUW.viz, ncol = 2)
+# dev.off()
+# 
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_growthUW.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_similarity_groupUW.viz,field_similarity_groupUW.viz, ncol = 2)
+# dev.off()
 
 
 ####### VIZ BY GAINS NEWCOMERS TENURE (comment_week) WEEK (domain_change, science_change)
@@ -519,15 +545,15 @@ summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>%
          axis.text = element_text(size = 14, face="bold"),
         axis.title = element_text(size = 14, face="bold"))
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_change.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_change.viz,field_change.viz, ncol = 2)
-dev.off()
-
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_change.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_change_group.viz,field_change_group.viz, ncol = 2)
-dev.off()
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_change.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_change.viz,field_change.viz, ncol = 2)
+# dev.off()
+# 
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_change.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_change_group.viz,field_change_group.viz, ncol = 2)
+# dev.off()
 
 ####### VIZ BY GAINS NEWCOMERS TENURE (by comment week order) WEEK (domain_change, science_change)
 
@@ -585,15 +611,15 @@ summarise(science_change = round(mean(science_change, na.rm=TRUE),digits=2)) %>%
          axis.text = element_text(size = 14, face="bold"),
         axis.title = element_text(size = 14, face="bold"))
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_changeUW.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_changeUW.viz,field_changeUW.viz, ncol = 2)
-dev.off()
-
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_changeUW.pdf", width=11, height=4)
-#pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-grid.arrange(domain_change_groupUW.viz,field_change_groupUW.viz, ncol = 2)
-dev.off()
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_changeUW.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_changeUW.viz,field_changeUW.viz, ncol = 2)
+# dev.off()
+# 
+# pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/www22-figures/similarity_week_changeUW.pdf", width=11, height=4)
+# #pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
+# grid.arrange(domain_change_groupUW.viz,field_change_groupUW.viz, ncol = 2)
+# dev.off()
 ```
 
 
@@ -602,182 +628,74 @@ dev.off()
 #   COMMENTERS MODELS          #
 ################################
 
-##### UPSAMPLING
-# Get only users who actually commented during the newcomer period
+##### Retained 
 newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
 newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
 
-newcomer_info_commenters <- newcomer_info_commenters[,c(1:39,41,42,40)]
+newcomer_info_commenters <- newcomer_info_commenters[,c(1:43,45,46,44)]
 
-trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
+newcomer_info_commenters.show <- newcomer_info_commenters[,c(1,3,4,7,11,12,21,27,33:38,41,42,43,45,46)]
+names(newcomer_info_commenters.show)[1:19] <- c("User","Classifications","Comments","Sessions","First_Comment_Sequence",
+                                                "First_Comment_Session","Domain_Slope","Field_Slope","Questions","Replies", 
+                                                "URLs","Tokens","Tags", "User_references","Days_Since_Launch","Domain_Cosine",
+                                                "Field_Cosine","Threads_created","Class")
+
+trainIndex_commenter <- createDataPartition(newcomer_info_commenters.show$Class, p = .7,
                                   list = FALSE,
                                   times = 1)
-train_commenter_up <- newcomer_info_commenters[ trainIndex_commenter,]
-valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
+train_commenter <- newcomer_info_commenters.show[ trainIndex_commenter,]
+valid_commenter <- newcomer_info_commenters.show[-trainIndex_commenter,]
 
-traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
-                  y=train_commenter_up$Class)
 
-retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses+start_count,data = traincommenterup,family="binomial")
+retention_commenters.glm <- glm(Class ~ Classifications+Comments+Sessions+Questions+URLs+Tokens+Tags+User_references+Threads_created+Days_Since_Launch+First_Comment_Sequence+First_Comment_Session+Domain_Slope+Domain_Cosine+Field_Slope+Field_Cosine,data = train_commenter,family="binomial")
 
-##### DOWNSAMPLING
-# trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
-#                                   list = FALSE,
-#                                   times = 1)
-# train_commenter_down <- newcomer_info_commenters[ trainIndex_commenter,]
-# valid_commenter_down <- newcomer_info_commenters[-trainIndex_commenter,]
-# 
-# traincommenterdown <-upSample(x=train_commenter_down[,-ncol(train_commenter_down)],y=train_commenter_down$Class)
-# 
-# retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+cosine_domain+cosine_science+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
-# 
-# logit2prob(coef(retention_commentersdown.glm)) #coefficients
-# nagelkerke(retention_commentersdown.glm) # performance measures
-# 
-# predictcommenter.down <- predict(retention_commentersdown.glm , newdata = valid_commenter_down, type = 'response')
-# predictcommenter.down <- as.integer(predictcommenter.down>0.5)
-# confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
+ logit2prob(coef(retention_commenters.glm)) #coefficients
+ nagelkerke(retention_commenters.glm) # performance measures
+ 
+ predictcommenter <- predict(retention_commenters.glm , newdata = valid_commenter, type = 'response')
+ predictcommenter <- as.integer(predictcommenter>0.5)
+ confusionMatrix(as.factor(predictcommenter),valid_commenter$Class)
 
-# https://easystats.github.io/performance/ 
+
+########## PREPARING WEEKLY MODEL DATA 
 week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
 week_model$week_class <- log(week_model$week_class+1)
-names(week_model)[15] <- "comment_week"
 week_model$comment_week <- as.factor(week_model$comment_week)
 
-# Science cosine and change
-science.lmer <- lmer(science_cosine ~ week_class +week_comment + questions + links + words + last_session + week + (1|user_id) , data = week_model,REML=FALSE)
+week_model.show <- week_model[,c(1,5:7,11:16,21,23,24,27)]
+names(week_model.show)[1:14] <- c("User","Classifications","Comments","Sessions","Questions","Replies","URLs","Tokens","Tags",
+                                  "User_references","Domain_Cosine","Last_session","Field_Cosine","Threads_created")
+# Science cosine and change https://crumplab.com/psyc7709_2019/book/docs/a-tutorial-for-using-the-lme-function-from-the-nlme-package-.html 
+science.lme <- lme(Field_Cosine ~ Classifications + Comments + Sessions + Questions + URLs + Tokens + Tags + User_references + Threads_created + Last_session, ~ 1 | User , data = week_model.show)
+ nagelkerke(science.lme) # performance measures
+
+##### Domain similarity score
+domain.lme <- lme(Domain_Cosine ~ Classifications + Comments + Sessions + Questions + URLs + Tokens + Tags + User_references + Threads_created + Last_session, ~ 1 | User , data = week_model.show)
+ nagelkerke(domain.lme) # performance measures
+ 
+
+# https://easystats.github.io/performance/ 
 
 
 ```
 
 ## Retention models
 ```{r mixedmodel2, results = "asis", echo=TRUE, include=TRUE}
-stargazer(retentionup.glm, retention_commentersup.glm, title="Retention Models",star.cutoffs = c(0.05, 0.01, 0.001), dep.var.labels=c("Retained (=1)"),
+stargazer(retention_commenters.glm, science.lme,domain.lme, title="Retention Models",star.cutoffs = c(0.05, 0.01, 0.001), dep.var.labels=c("Retained (=1)"),
           object.names = TRUE,
           font.size = "small",
           align = TRUE,
-          omit.stat=c("f", "ser"),
-          column.sep.width = "-8pt",
-          type = "html",
+          #omit.stat=c("f", "ser"),
+          column.sep.width = "-10pt",
+          no.space = TRUE, # to remove the spaces after each line of coefficients
+          type = "latex",
           t.auto=F, p.auto=F, 
-          report = "vc*",
-           digits=3
+          #ci = TRUE, 
+          report = ('vcs*'), 
+          single.row = TRUE,
+          digits=2
           
 ) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
-
-
-# Compute a composite change score from first and last weeks of contributing
-
-# Active 11 weeks (High similarity for both science and domain) - 513912 
-# Active 10 weeks (Low similarity for both science and domain) - 1412875 
-# Active 4 weeks (High similarity for both science and domain) - 315840 
-# Active 4 weeks (Low similarity for both science and domain) - 2538 
-# Dropout with high scores - 1692922
-# Dropout with low scores - 2066383
-
-
-```
-
-### All retention performance 
-```{r}
-logit2prob(coef(retentionup.glm)) #coefficients
-nagelkerke(retentionup.glm) # performance measures
-
-predict.up <- predict(retentionup.glm , newdata = valid_up, type = 'response')
-predict.up <- as.integer(predict.up>0.5)
-confusionMatrix(as.factor(predict.up),valid_up$Class)
-```
-
-### Commnter retention performance
-```{r}
-################################
-#   COMMENTERS MODELS          #
-################################
-
-##### UPSAMPLING
-
-# Get only users who actually commented during the newcomer period
-
-newcomer_info_commenters <- newcomers_data[which(newcomers_data$newcomer_comment>=1),]
-newcomer_info_commenters <- newcomer_info_commenters[which(newcomer_info_commenters$newcomer_weeks >= 2 & newcomer_info_commenters$newcomer_comment>=1),] #1407
-
-
-
-trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train_commenter_up <- newcomer_info_commenters[ trainIndex_commenter,]
-valid_commenter_up <- newcomer_info_commenters[-trainIndex_commenter,]
-
-
-traincommenterup<-upSample(x=train_commenter_up[,-ncol(train_commenter_up)],
-                  y=train_commenter_up$Class)
-
-retention_commentersup.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterup,family="binomial")
-
-logit2prob(coef(retention_commentersup.glm)) #coefficients
-nagelkerke(retention_commentersup.glm) # performance measures
-
-predictcommenter.up <- predict(retention_commentersup.glm , newdata = valid_commenter_up, type = 'response')
-predictcommenter.up <- as.integer(predictcommenter.up>0.5)
-confusionMatrix(as.factor(predictcommenter.up),valid_commenter_up$Class)
-```
-
-```{r }
-trainIndex_commenter <- createDataPartition(newcomer_info_commenters$Class, p = .7,
-                                  list = FALSE,
-                                  times = 1)
-train_commenter_down <- newcomer_info_commenters[ trainIndex_commenter,]
-valid_commenter_down <- newcomer_info_commenters[-trainIndex_commenter,]
-
-traincommenterdown<-upSample(x=train_commenter_down[,-ncol(train_commenter_down)],y=train_commenter_down$Class)
-
-retention_commentersdown.glm <- glm(Class ~ newcomer_class+newcomer_comment+newcomer_sessions+newcomer_first_comment_seq+dslope+sslope+domain_cosine+science_cosine+questions+links+words+since_start+newcomer_first_comment_ses,data = traincommenterdown,family="binomial")
-
-logit2prob(coef(retention_commentersdown.glm)) #coefficients
-nagelkerke(retention_commentersdown.glm) # performance measures
-
-predictcommenter.down <- predict(retention_commentersdown.glm , newdata = valid_commenter_down, type = 'response')
-predictcommenter.down <- as.integer(predictcommenter.down>0.5)
-confusionMatrix(as.factor(predictcommenter.down),valid_commenter_down$Class)
-
-### SIMILARITY MODEL
-week_model <- newcomers_week_data[which(!is.na(newcomers_week_data$variable)),]
-#Similarity = number of session + days since start  + classifications + comments + gap( difference between current and previous week + (1|user_id)
-```
-
-
-```{r mixedmodel3, results = "asis", echo=TRUE, include=TRUE}
-## Cosine models
-
-stargazer(domain_model.lmer,science_model.lmer, title="Similarity Models (lmer)",star.cutoffs = c(0.05, 0.01, 0.001),
-          object.names = TRUE,
-          font.size = "small",
-          align = TRUE,
-          omit.stat=c("f", "ser"),
-          column.sep.width = "-8pt",
-          type = "html",
-          t.auto=F, p.auto=F, 
-          report = "vc*",
-           digits=3
-          
-) #covariate.labels=c("Agent Centered","Authority Subject","Communal")
-
-```
-
-
-```{r mixedmodel4, results = "asis", echo=TRUE, include=TRUE}
-stargazer(domain_model.lme,science_model.lme, title="Similarity Models (lme)",star.cutoffs = c(0.05, 0.01, 0.001),
-          object.names = TRUE,
-          font.size = "small",
-          align = TRUE,
-          omit.stat=c("f", "ser"),
-          column.sep.width = "-8pt",
-          type = "html",
-          t.auto=F, p.auto=F, 
-          report = "vc*",
-           digits=3
-) 
 ```
 
 
