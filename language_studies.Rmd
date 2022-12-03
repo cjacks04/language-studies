@@ -29,7 +29,7 @@ library(performance)
 library(tidytext)
 library(gridExtra)
 library(trend)
-library(changepoint)
+
 #Functions
 logit2prob <- function(logit){
   odds <- exp(logit)
@@ -51,6 +51,13 @@ stargazer2 <- function(model, odd.ratio = F, ...) {
   }
 }
 launch_date <- as.POSIXct("2016-10-12 12:00:00",  format="%Y-%m-%d %H:%M:%S")
+
+# Import words
+domain <- read.table("/Volumes/cbjackson2/language models/domain_clean.txt", quote="\"", comment.char="")
+domain <- c(domain$x)
+
+field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quote="\"", comment.char="")
+field <- c(field$x)
 ```
 
 # Project Growth 
@@ -88,12 +95,7 @@ all_comments_summary <- all_comments  %>%
 
 all_words <- data.frame(read_csv("/Volumes/cbjackson2/language models/worddata/word_first_use.csv")) # A
 
-# Import words
-domain <- read.table("/Volumes/cbjackson2/language models/domain_clean.txt", quote="\"", comment.char="")
-domain <- c(domain$x)
 
-field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quote="\"", comment.char="")
-field <- c(field$x)
 #word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
 
 all_words_summary <- all_words  %>%  
@@ -152,10 +154,11 @@ remove(weeks_s)
 ############################################################
 # UNIGRAMS 
 unigrams <- read_csv("/Volumes/cbjackson2/language models/worddata/unigram_comments.csv") # All unigrams
+unigrams <- data.frame(unigrams)
 
 all_token_summary <- unigrams  %>%  
   group_by(week=floor_date(comment_created_at, "week")) %>% 
-  summarize(token_count =length(unique(unigrams))) %>%
+  summarize(token_count =length(unigram)) %>%
   mutate(
          token_growth = cumsum(token_count),
          token_pct = cumsum(token_count)/sum(token_count),
@@ -166,7 +169,7 @@ all_token_summary <- unigrams  %>%
 ############################################################
 # THREADS 
 
-all_threads_summary <- unigrams  %>%  
+all_threads_summary <- all_comments  %>%  
   group_by(week=floor_date(comment_created_at, "week")) %>% 
   summarize(thread_count =length(discussion_id)) %>%
   mutate(
@@ -181,66 +184,86 @@ eco_grow <- merge(eco_grow,all_token_summary, by="week", all.x = TRUE)
 eco_grow <- merge(eco_grow,domain_words_summary, by="week", all.x = TRUE)
 eco_grow <- merge(eco_grow,field_words_summary, by="week", all.x = TRUE)
 
+remove(all_comments_summary,all_words_summary,all_threads_summary,all_token_summary,domain_words_summary,field_words_summary)
 
 ####################  
 ####################  Visualize data (3x2) grid
 ####################  
 
 
+### Visualizing aggregate growth
+eco_grow_plot <- eco_grow[,c(1,3,7,11,15,19,23)] 
+eco_grow_plot$week <- as.Date(eco_grow_plot$week)
+eco_grow_plot.m <- melt(eco_grow_plot, id.vars="week")
+
+eco_grow_plot.m$variable <-  recode(eco_grow_plot.m$variable, comment_growth = "Comments", word_growth = "New Tokens",thread_growth = "Threads", token_growth = "All Tokens",
+                                    domain_growth = "Domain Tokens", field_growth = "Field Tokens")
+
+feature_growth <- ggplot(eco_grow_plot.m, aes(week, value)) + 
+  geom_line(size=1) + 
+  geom_smooth(size=.7, color="grey") +
+  labs(x="Date",y="Feature growth") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
+  theme_classic() + scale_color_nejm() +
+  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position="none", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10, face="bold")) + 
+  geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
+  geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=2)) +
+    facet_wrap(~variable, scales="free_y")
+
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_growth.pdf", width=11, height=4)
+feature_growth
+dev.off()
+
+### Visualizing weekly contributions (counts)
+eco_count_plot <- eco_grow[,c(1,2,6,10,14,18,22)] 
+eco_count_plot$week <- as.Date(eco_count_plot$week)
+eco_count_plot.m <- melt(eco_count_plot, id.vars="week")
+
+eco_count_plot.m$variable <-  recode(eco_count_plot.m$variable, comment_count = "Comments", word_count = "New Tokens",thread_count = "Threads", token_count = "All Tokens",
+                                    domain_count = "Domain Tokens", field_count = "Field Tokens")
+
+feature_count <- ggplot(eco_count_plot.m, aes(week, value)) + 
+  geom_point(size=.1) + 
+  geom_smooth(size=.7, color="grey") +
+  labs(x="Date",y="Feature growth") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
+  theme_classic() + scale_color_nejm() +
+  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position="none", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10, face="bold")) + 
+  geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
+  geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=2)) +
+    facet_wrap(~variable, scales="free_y")
+
+pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
+feature_count
+dev.off()
+
 ####################  
 ####################  Stat Analysis
 ####################  
 
-##### Conduct pettit test (changepoint) https://rpubs.com/shirazipooya/Pettitt-Test
+##### Conduct pettit test (changepoint) https://rpubs.com/shirazipooya/Pettitt-Test on the number of values each day 
+growth_pettit <- eco_count_plot.m %>% 
+  group_by(variable) %>% 
+  mutate(statistics = pettitt.test(value)$statistic,
+         estimate = pettitt.test(value)$estimate,
+         p_value = pettitt.test(value)$p.value,
+         week = eco_count_plot.m[['week']][pettitt.test(value)$estimate]) %>% 
+  distinct(variable,statistics,estimate,week,p_value)
+
 ##### Conduct growth models (answering ... which growth model describes content) https://rpubs.com/jaelison/200149 or #https://www.marinedatascience.co/blog/2019/09/28/comparison-of-change-point-detection-methods/
 
 
-
-sens.slope(words_month$agg_pct, conf.level = 0.95)
-sens.slope(words_month_type$agg_pct[which(words_month_type$type=="Field")], conf.level = 0.95)
-sens.slope(words_month_type$agg_pct[which(words_month_type$type=="Domain")], conf.level = 0.95)
-
-# Change points
-cpt.mean(words_month$count, method = "AMOC")
-
-
-
-
-# plot community language growth
-lang_growth <- ggplot(words_month, aes(x=as.Date(week), y=agg_pct)) + 
-  geom_line(size=1) + 
-  geom_smooth(size=.7, color="grey") +
-  labs(x="Month",y="Token growth") + 
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
-  theme_classic() + scale_color_nejm() +
-  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="none", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 12, face="bold"),
-        axis.title = element_text(size = 13, face="bold")) + 
-  geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
-  geom_text(aes(x=as.Date("2016-10-11"), label="Project launch", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=5))
-
-type_growth <- ggplot(subset(words_month_type, type %in% c("Field","Domain")), aes(x=as.Date(week), y=agg_pct, group=type)) + 
-  geom_line(size=1, aes(color=type)) + 
-  geom_smooth(size=.7, aes(group=type), color="grey") +
-  labs(x="Month",y="Token growth") + 
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
-  theme_classic() +  scale_color_nejm() +
-  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position = c(0.8, 0.2), 
-        legend.key = element_rect(fill = NA, color = NA),
-        legend.title = element_blank(),
-        axis.text = element_text(size = 12, face="bold"),
-        axis.title = element_text(size = 13, face="bold")) +
-  geom_vline(aes(xintercept=as.Date("2016-10-01")), colour="black",size=.5) + 
-  geom_text(aes(x=as.Date("2016-10-11"), label="Project launch", y=.7), colour="grey", angle=90, vjust = -1, text=element_text(size=5))
-  
-# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/lang_growth.pdf", width=11, height=4)
-# grid.arrange(lang_growth,type_growth, ncol = 2)
-# dev.off()
 
 
 
