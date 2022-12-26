@@ -60,7 +60,7 @@ field <- read.table("/Volumes/cbjackson2/language models/science_clean.txt", quo
 field <- c(field$x)
 ```
 
-# Project Growth 
+
 ```{r project-growth, ech0=FALSE}
 
 # How the project grows over time
@@ -94,10 +94,6 @@ all_comments_summary <- all_comments  %>%
 # WORDS 
 
 all_words <- data.frame(read_csv("/Volumes/cbjackson2/language models/worddata/word_first_use.csv")) # A
-
-
-#word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
-
 all_words_summary <- all_words  %>%  
   group_by(week=floor_date(firstuse, "week")) %>% 
   summarize(word_count =length(unigram)) %>%
@@ -171,7 +167,7 @@ all_token_summary <- unigrams  %>%
 
 all_threads_summary <- all_comments  %>%  
   group_by(week=floor_date(comment_created_at, "week")) %>% 
-  summarize(thread_count =length(discussion_id)) %>%
+  summarize(thread_count =length(unique(discussion_id))) %>%
   mutate(
          thread_growth = cumsum(thread_count),
          thread_pct = cumsum(thread_count)/sum(thread_count),
@@ -196,8 +192,7 @@ eco_grow_plot <- eco_grow[,c(1,3,7,11,15,19,23)]
 eco_grow_plot$week <- as.Date(eco_grow_plot$week)
 eco_grow_plot.m <- melt(eco_grow_plot, id.vars="week")
 
-eco_grow_plot.m$variable <-  recode(eco_grow_plot.m$variable, comment_growth = "Comments", word_growth = "New Tokens",thread_growth = "Threads", token_growth = "All Tokens",
-                                    domain_growth = "Domain Tokens", field_growth = "Field Tokens")
+eco_grow_plot.m$variable <-  recode(eco_grow_plot.m$variable, comment_growth = "Comments", word_growth = "New Tokens",thread_growth = "Threads", token_growth = "All Tokens",domain_growth = "Domain Tokens", field_growth = "Field Tokens")
 
 feature_growth <- ggplot(eco_grow_plot.m, aes(week, value)) + 
   geom_line(size=1) + 
@@ -229,7 +224,7 @@ eco_count_plot.m$variable <-  recode(eco_count_plot.m$variable, comment_count = 
                                     domain_count = "Domain Tokens", field_count = "Field Tokens")
 
 feature_count <- ggplot(eco_count_plot.m, aes(week, value)) + 
-  geom_point(size=.1) + 
+  geom_point(linewidth=.1) + 
   geom_smooth(size=.7, color="grey") +
   labs(x="Date",y="Feature growth") + 
   scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
@@ -244,7 +239,9 @@ feature_count <- ggplot(eco_count_plot.m, aes(week, value)) +
   geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=2)) +
     facet_wrap(~variable, scales="free_y")
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
+
+#pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
 feature_count
 dev.off()
 
@@ -263,45 +260,55 @@ growth_pettit <- eco_count_plot.m %>%
 
 ##### Conduct growth models (answering ... which growth model describes content) https://rpubs.com/jaelison/200149 or #https://www.marinedatascience.co/blog/2019/09/28/comparison-of-change-point-detection-methods/
 
+eco_growthpct_plot <- eco_grow[,c(1,5,9,13,17,21,25)] 
+eco_growthpct_plot <- eco_growthpct_plot[which(eco_growthpct_plot$week > launch_date),] # remove after the launch
+eco_growthpct_plot$week <- as.Date(eco_growthpct_plot$week)
+eco_growthpct_plot.m <- melt(eco_growthpct_plot, id.vars="week")
+eco_growthpct_plot.m$transformed <- eco_growthpct_plot.m$value*100
 
 
-
-
-
-
-
+remove(unigrams,eco_count_plot,eco_count_plot.m,eco_grow_plot,eco_grow_plot.m)
 ```
-
-
 
 ```{r }
 
+# #word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
 # For each newcomer (for modeling) can we include some measure of the community during each week? 
 
-newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv")
+newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv",show_col_types = FALSE)
 newcomers_data <- newcomers_data[,-1]
-newcomers_week_data <-  read_csv("/Volumes/cbjackson2/language models/newcomer_week_info.csv") 
+
+testers <- newcomers_data$user_id[which(newcomers_data$join_date < launch_date)]
+not_eligible <- newcomers_data$user_id[which(newcomers_data$join_date > max(all_comments$comment_created_at) - months(3))]
+
+#remove people who are project management, science team, and before launch
+project_team <- c("uber_pye","areeda","mzevin1","RF45","jrsmith02","sbc538","adamamiller","olipatane","smarttiz","jafeldt","mcoughlin","citizenscientist1994","cjackso3", "camallen","lmp579","sciencejedi","crowston","Carsten","jessiemcd","ejm553","srallen", "costerlu@syr.edu","lcalian","joeykey","matsoulina","trouille","zooniverse")
+
+team <- unique(all_comments$comment_user_id[which(all_comments$comment_user_login %in% project_team)]) 
+
+newcomers_data <- data.frame(newcomers_data)
+
+newcomers_data <- newcomers_data[which(
+  !newcomers_data$user_id %in% team & 
+    !newcomers_data$user_id %in% testers & 
+    !newcomers_data$user_id %in% not_eligible),]
+
+population <- newcomers_data$user_id
+
+newcomers_week_data <-  read_csv("/Volumes/cbjackson2/language models/newcomer_week_info.csv",show_col_types = FALSE) 
 newcomers_week_data <- data.frame(newcomers_week_data)
 newcomers_week_data$week <- as.Date(newcomers_week_data$week)
 newcomers_week_data$user_id <- as.factor(newcomers_week_data$user_id)
-comments <- read_csv("/Volumes/cbjackson2/language models/comments_newcomer_add.csv") 
+newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% population),]
 
 
+newcomer_comments <- merge(all_comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
 
+newcomer_comments$include <- ifelse(newcomer_comments$comment_created_at <= add_with_rollback(newcomer_comments$join_date, months(3), roll_to_first = TRUE),1,0)
+newcomer_comments <- newcomer_comments[which(newcomer_comments$include==1),]
+newcomer_comments <- newcomer_comments[which(newcomer_comments$comment_user_id %in% population),] # only eligible people
 
-# Add comment features
-comments$tags <- stringr::str_count(comments$comment_body, "\\#") 
-comments$user_references <- stringr::str_count(comments$comment_body, "\\@") 
-comments$domain_words <- stringr::str_count(comments$comment_body, paste(domain, collapse='|'))
-comments$field_words <- stringr::str_count(comments$comment_body, paste(field, collapse='|'))
-
-# Add newcomer comment features to newcomers_data
-comments <- merge(comments,newcomers_data[,c("user_id","join_date")],by.y="user_id",by.x = "comment_user_id",all.x = TRUE)
-
-#comments$include <- ifelse(comments$comment_created_at <= add_with_rollback(comments$join_date, months(3), roll_to_first = TRUE),1,0)
-#comments <- comments[which(comments$include==1),]
-
-comment_summary <- comments %>% 
+comment_summary <- newcomer_comments %>% 
   group_by(user_id=comment_user_id) %>%
   summarise(comment_no=length(comment_id),
             questions = sum(questions),
@@ -314,8 +321,7 @@ comment_summary <- comments %>%
             field_words = sum(field_words)
   )
 
-
-comment_week_summary <- comments %>% 
+comment_week_summary <- newcomer_comments %>% 
   group_by(user_id=as.factor(comment_user_id), week=floor_date(created_at, "week")) %>%
   summarise(comment_no=length(comment_id),
             questions = sum(questions),
@@ -334,16 +340,13 @@ comment_week_summary <- as.data.table(comment_week_summary)[, comment_week := 1:
 comment_week_summary <- data.frame(comment_week_summary)
  
 newcomers_data <- merge(newcomers_data,comment_summary, by="user_id",all.x = TRUE)
-newcomers_data$since_start <- round(as.numeric(difftime(newcomers_data$join_date,launch_date,units = "days")),digits = 0)
 newcomers_data_org <- newcomers_data
 remove(comment_summary)
 
-#newcomers_data <- newcomers_data[which(newcomers_data$join_date >= as.Date(launch_date)),] # removed 1096 users who were around prior to launch
-
 ### Build Cosine dataset
-domain_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_domain.csv") 
+domain_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_domain.csv",show_col_types = FALSE) 
 names(domain_cosine)[c(4,8)] <- c("domain_cosine","domain_change")
-science_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_science.csv") 
+science_cosine <- read_csv("/Volumes/cbjackson2/language models/cosine_science.csv",show_col_types = FALSE) 
 
 cosine <- merge(domain_cosine,science_cosine, by=c("user_id","variable"))
 cosine <- cosine[,c(1,2,4,8,5,6,7,10,14)]
@@ -351,7 +354,6 @@ names(cosine)[c(5:9)] <- c("real_week","comment_week","last_session","science_co
 
 # Get only newcomer cosine information
 newcomers_period <-  newcomers_data[,c(1,9)]
-
 cosine <- merge(cosine,newcomers_period,by="user_id")
 cosine <- cosine[which(cosine$comment_week <= cosine$newcomer_comment_weeks),]
 
@@ -360,42 +362,82 @@ newcomers_week_data <- merge(newcomers_week_data,cosine,by.x=c("user_id","user_w
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_week<=12 & !is.na(newcomers_week_data$comment_no)),]
 
-newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","science_cosine","comment_week")],
-                                  by.x=c("user_id","newcomer_comment_weeks"),by.y = c("user_id","comment_week"))
+newcomers_data <- merge(newcomers_data,cosine[,c("user_id","domain_cosine","science_cosine","comment_week")], by.x=c("user_id","newcomer_comment_weeks"),by.y = c("user_id","comment_week"), all.x = TRUE) 
+newcomers_data <- newcomers_data[which(newcomers_data$newcomer_comment>=1),] #208 have no cosine data
 
+# lost 208 because no cosine data
 newcomers_data$Class <- as.factor(newcomers_data$retained) # 2610 
-
-# remove those who would not have a chance to represent as a newcomer in our data
-newcomers_data$newcomer_chance <- ifelse(newcomers_data$join_date <= add_with_rollback(as.Date("2022-03-14"), months(-3), roll_to_first = TRUE),1,0) 
-#98 people did not have opportunity to become newcomer
-
-newcomers_data <- newcomers_data[which(newcomers_data$newcomer_chance==1),]
-newcomers_data <- newcomers_data[which(newcomers_data$since_start>=0),]
-
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
+
+###### ANALYSIS OF COMMENTERS AND COSING newcomers_week_data  AND newcomers_data
+
+# SANITY CHECK FOR 36787 
+ 
+# Plot features
+user_count_plot <- newcomers_week_data %>%
+  group_by(user_week) %>%
+  summarise_at(c("comment_no","questions","links","words","tags","user_references",
+                 "domain_words","field_words","domain_cosine","domain_change",
+                 "science_cosine","science_change"), mean, na.rm = TRUE) 
+  
+user_count_plot.v <- newcomers_week_data %>%
+  group_by(user_week) %>%
+  summarise(volunteers =  n_distinct(user_id))
+
+#user_count_plot <- merge(user_count_plot,user_count_plot.v, by="user_week",all.x = TRUE)
+
+user_count_plot.m <- melt(user_count_plot, id.vars="user_week")
+
+user_count_plot.m$variable <-  recode(user_count_plot.m$variable, comment_no = "Comments", questions = "Questions",links = "URLs", words = "Tokens",tags = "Tags", user_references = "@s")
+
+commentfeature_grow <- ggplot(subset(user_count_plot.m, variable %in% c("Comments","Questions","URLs","Tokens","Tags","@s")), aes(as.factor(user_week), value)) + 
+  geom_point(linewidth=.1) + 
+  geom_smooth(size=.7, color="grey") +
+  labs(x="Week",y="Mean use") + 
+  theme_classic() + scale_color_nejm() +
+  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(hjust = 1),
+        legend.position="none", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10, face="bold")) + 
+    facet_wrap(~variable, scales="free_y")
+
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_comment.pdf", width=11, height=4)
+commentfeature_grow
+dev.off()
+
+
+
+commentfeature_grow <- ggplot(subset(user_count_plot.m, ! variable %in% c("Comments","Questions","URLs","Tokens","Tags","@s")), aes(as.factor(user_week), value)) + 
+  geom_point(linewidth=.1) + 
+  geom_smooth(size=.7, color="grey") +
+  labs(x="Week",y="Mean use") + 
+  theme_classic() + scale_color_nejm() +
+  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+  theme(axis.text.x = element_text(hjust = 1),
+        legend.position="none", 
+        legend.title = element_blank(),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10, face="bold")) + 
+    facet_wrap(~variable, scales="free_y")
+
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_comment.pdf", width=11, height=4)
+commentfeature_grow
+dev.off()
+
 ```
 
 
 
 
-```{r, eval=FALSE}
-
-
-
-```
-
-```{r}
-# Comment data
-
-
-newcomers_data <-  merge(newcomers_data,newcomer_threads_user, by=c("user_id"), all.x = TRUE)
-
-
-
-```
 
 
 ```{r }
+# Visualization for number of newcomers vs. new commenters (bar chart)
+
 ####### USER GROWTH
 join_summary_week <- newcomers_data_org %>% 
    group_by(join_date) %>% 
@@ -409,53 +451,37 @@ join_summary_week_d <- newcomers_data_org %>%
              newcomer_commenters = length(user_id[which(newcomer_comment >=1)]),
              percent_commenters = newcomer_commenters/newcomers)
 
-
 week_pct_comment <- ggplot(join_summary_week, aes(x=join_date, y=percent_commenters)) + 
-  #geom_line(size=.7,color="#56B4E9") + 
+  #geom_point() + 
   geom_smooth(size=.7,color="#56B4E9") +
-  labs(x="Month",y="Language additions") + 
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
+  labs(x="Date",y="New commenters") + 
+  scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
   theme_classic() +  
-  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_y_continuous(labels = function(x) paste0(round(x,digits=2), "%")) +
+  theme_classic() + scale_color_nejm() +
+  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", 
+        legend.position="none", 
         legend.title = element_blank(),
-        axis.text = element_text(size = 14, face="bold"),
-        axis.title = element_text(size = 14, face="bold"))  
-  geom_vline(aes(xintercept=c("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 22, face="bold")) + 
+    geom_vline(aes(xintercept=as.Date(join_summary_week[['join_date']][pettitt.test(join_summary_week$percent_commenters)$estimate]
+)),size=.5, linetype="dotted")  
 
-join_summary_month <- newcomers_data_org %>% 
-   group_by(month=floor_date(join_date, "month")) %>% 
-   summarize(newcomers = length(user_id),
-             newcomer_commenters = length(user_id[which(newcomer_comment >=1)]),
-             percent_commenters = newcomer_commenters/newcomers)
+newcomer_change_pt <- pettitt.test(join_summary_week$percent_commenters)
 
-month_pct_comment <-  ggplot(join_summary_month, aes(x=month, y=percent_commenters)) + 
-  #geom_line(size=.7,color="#56B4E9") + 
-  geom_smooth(size=.7,color="#56B4E9") +
-  labs(x="Month-Year",y="Newcomers commentings (%)") + 
-  scale_x_date(date_labels="%b %y",date_breaks  ="4 month") + 
-  theme_classic() +  
-  scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="bottom", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 14, face="bold"),
-        axis.title = element_text(size = 14, face="bold"))  
-  geom_vline(aes(xintercept=as.Date("2016-10-01")),linetype="dashed", color = "grey22",size=.7)
+
+#pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/pct_comment.pdf", width=11, height=6)
+week_pct_comment
+dev.off()
   
+#Summarize amount of activity 
+#newcomer_comments_summary <- newcomer_comments %>% tbl_summary()
+# Test comparisons trial2 %>% tbl_summary(by = trt) %>% add_p() 
 
-# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/community_lang_growth.pdf", width=5, height=5)
-# community_lang_growth
-# dev.off()
-#   
-# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/month_pct_comment.pdf", width=5, height=5)
-# month_pct_comment
-# dev.off()
-# 
-# pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/week_pct_comment.pdf", width=5, height=5)
-# week_pct_comment
-# dev.off()
+
+
 ```
 
 
