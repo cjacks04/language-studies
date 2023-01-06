@@ -41,7 +41,8 @@ data_summary <- function(data, varname, groupnames){
   require(plyr)
   summary_func <- function(x, col){
     c(mean = mean(x[[col]], na.rm=TRUE),
-      sd = sd(x[[col]], na.rm=TRUE))
+      sd = sd(x[[col]], na.rm=TRUE),
+      median = median(x[[col]], na.rm=TRUE))
   }
   data_sum<-ddply(data, groupnames, .fun=summary_func,
                   varname)
@@ -233,7 +234,7 @@ feature_growth <- ggplot(eco_grow_plot.m, aes(week, value)) +
     facet_wrap(~variable, scales="free_y")
 
 
-pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_growth.pdf", width=11, height=4)
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_growth.pdf", width=11, height=4)
 feature_growth
 dev.off()
 
@@ -292,9 +293,6 @@ remove(unigrams,eco_count_plot,eco_count_plot.m,eco_grow_plot,eco_grow_plot.m)
 ```
 
 ```{r }
-
-# #word_use <- read_csv("/Volumes/cbjackson2/language models/worddata/word_use_clean.csv") 
-# For each newcomer (for modeling) can we include some measure of the community during each week? 
 
 newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv",show_col_types = FALSE)
 newcomers_data <- newcomers_data[,-1]
@@ -357,6 +355,7 @@ comment_week_summary <- newcomer_comments %>%
             field_words = sum(field_words)
   )
 
+
 comment_week_summary <- data.frame(comment_week_summary)
 comment_week_summary <- comment_week_summary[order(comment_week_summary$user_id,comment_week_summary$week),]
 comment_week_summary <- as.data.table(comment_week_summary)[, comment_week := 1:.N,, by = list(user_id)] 
@@ -392,6 +391,26 @@ newcomers_data <- newcomers_data[which(newcomers_data$newcomer_comment>=1),] #20
 newcomers_data$Class <- as.factor(newcomers_data$retained) # 2610 
 newcomers_week_data <- newcomers_week_data[which(newcomers_week_data$user_id %in% newcomers_data$user_id),]
 
+### Add thread info
+thread_first_user <- merge(thread_first_user,newcomers_data[,c("user_id","join_date")],by="user_id",all.x = TRUE)
+
+thread_first_user$include <- ifelse(thread_first_user$week <= add_with_rollback(thread_first_user$join_date, months(2), roll_to_first = TRUE),1,0)
+thread_first_user <- thread_first_user[which(thread_first_user$include==1),]
+thread_first_user <- thread_first_user[which(thread_first_user$user_id %in% population),] # only eligible people
+
+thread_create <- thread_first_user  %>% 
+  group_by(user_id) %>%
+  summarise(new_threads=sum(threads_started))
+
+newcomers_data <- merge(newcomers_data,thread_create,by="user_id",all.x = TRUE)
+newcomers_data$new_threads[is.na(newcomers_data$new_threads)] <- 0  #fill NA with 0 
+
+newcomers_week_data <- merge(newcomers_week_data,thread_first_user[,c("user_id","week","threads_started")],by=c("user_id","week"),all.x = TRUE)
+newcomers_week_data$threads_started[is.na(newcomers_week_data$threads_started)] <- 0  #fill NA with 0 
+```
+
+
+```{r }
 ###### ANALYSIS OF COMMENTERS AND COSING newcomers_week_data  AND newcomers_data
 
 # SANITY CHECK FOR 36787 
@@ -401,12 +420,12 @@ user_count_plot <- newcomers_week_data %>%
   group_by(user_week) %>%
   summarise_at(c("comment_no","questions","links","words","tags","user_references",
                  "domain_words","field_words","domain_cosine","domain_change",
-                 "science_cosine","science_change"), mean, na.rm = TRUE) 
+                 "science_cosine","science_change","threads_started"), mean, na.rm = TRUE) 
   
 user_count_plot.bar <- newcomers_week_data %>%
   select("user_week","comment_no","questions","links","words","tags","user_references",
                  "domain_words","field_words","domain_cosine","domain_change",
-                 "science_cosine","science_change") 
+                 "science_cosine","science_change","threads_started") 
 
 user_count_plot.sum <- melt(user_count_plot.bar, id.vars="user_week")
 
@@ -414,16 +433,16 @@ user_count_plot.sum <- melt(user_count_plot.bar, id.vars="user_week")
 user_count_plot.summary <- data_summary(user_count_plot.sum, varname=c("value"), 
                     groupnames=c("variable","user_week"))
 
-user_count_plot.summary$variable <-  recode(user_count_plot.summary$variable, comment_no = "Comments", questions = "Questions",links = "URLs", words = "Tokens",tags = "Tags", user_references = "@s",domain_words = "Words(Field)",field_words = "Words(Astro)",science_change ="Change(Astro)",domain_change="Change(Field)",domain_cosine="Cosine(Field)",science_cosine="Cosine(Astro)")
+user_count_plot.summary$variable <-  recode(user_count_plot.summary$variable, comment_no = "Comments", questions = "Questions",links = "URLs", words = "Tokens",tags = "Tags", user_references = "@s",domain_words = "Words(Field)",field_words = "Words(Astro)",science_change ="Change(Astro)",domain_change="Change(Field)",domain_cosine="Cosine(Field)",science_cosine="Cosine(Astro)",threads_started="Threads")
 
 user_count_plot.summary$user_week=as.factor(user_count_plot.summary$user_week)
 user_count_plot.summary$variable <- factor(user_count_plot.summary$variable, 
                                             levels=c("Words(Field)", "Cosine(Field)", "Change(Field)",
                                                      "Words(Astro)", "Cosine(Astro)","Change(Astro)",
-                                                     "Comments","Tokens","Tags","Questions","URLs","@s"))
+                                                     "Comments","Threads","Tokens","Tags","Questions","URLs","@s"))
 
 ## HIST
-feature_commentB <- ggplot(subset(user_count_plot.summary, ! variable %in% c("Comments","Questions","URLs","Tokens","Tags","@s",NA)), aes(x=user_week, y=value)) + 
+feature_commentB <- ggplot(subset(user_count_plot.summary, ! variable %in% c("Comments","Threads","Questions","URLs","Tokens","Tags","@s",NA)), aes(x=user_week, y=value)) + 
   geom_bar(stat="identity", color="black", 
            position=position_dodge()) +
   #geom_errorbar(aes(ymin=value, ymax=value+sd), width=.2,
@@ -454,13 +473,15 @@ user_count_plot.v <- newcomers_week_data %>%
 
 user_count_plot.m <- melt(user_count_plot, id.vars="user_week")
 
-user_count_plot.m$variable <-  recode(user_count_plot.m$variable, comment_no = "Comments", questions = "Questions",links = "URLs", words = "Tokens",tags = "Tags", user_references = "@s")
+user_count_plot.m$variable <-  recode(user_count_plot.m$variable, comment_no = "Comments",threads_started = "Threads", questions = "Questions",links = "URLs", words = "Tokens",tags = "Tags", user_references = "@s",domain_cosine="Cosine(Field)",science_cosine= "Cosine(Science)")
 
-commentfeature_grow <- ggplot(subset(user_count_plot.m, variable %in% c("Comments","Questions","URLs","Tokens","Tags","@s")), aes(as.factor(user_week), value)) + 
+user_count_plot.m <- user_count_plot.m[which(user_count_plot.m$variable %in% c("Comments","Threads","Questions","URLs","Tokens","Tags","@s","Cosine(Field)","Cosine(Science)")),]
+
+commentfeature_grow <- ggplot(user_count_plot.m, aes(user_week, value)) + 
   geom_point(linewidth=.1) + 
-  geom_smooth(size=.7, color="grey") +
+  #geom_smooth(size=.7, color="grey") +
   labs(x="Week",y="Mean use") + 
-  theme_classic() + scale_color_nejm() +
+  theme_linedraw() + 
   #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
   theme(axis.text.x = element_text(hjust = 1),
         legend.position="none", 
@@ -475,30 +496,8 @@ commentfeature_grow
 dev.off()
 
 
-### BAR 
-commentfeature_growB <- user_count_plot.summary %>% 
- ggplot(subset(user_count_plot.summary, variable %in% c("Comments","Questions","URLs","Tokens","Tags","@s")), aes(x=user_week, y=value)) + 
-  geom_bar(stat="identity", fill="grey", 
-           position=position_dodge()) +
-  #geom_errorbar(aes(ymin=value, ymax=value+sd), width=.2,
-                 #position=position_dodge(.9)) + 
-  labs(x="Week",y="Average") + 
-  theme_linedraw() + 
-  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
-  theme(axis.text.x = element_text(hjust = 1),
-        legend.position="none", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 8),
-        axis.title = element_text(size = 10, face="bold")) + 
-    facet_wrap(~variable, scales="free_y")
-
-
-
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/commentfeature_growB.pdf", width=11, height=4)
-commentfeature_growB
-dev.off()
-
 ```
+
 
 
 
@@ -551,8 +550,23 @@ dev.off()
 #newcomer_comments_summary <- newcomer_comments %>% tbl_summary()
 # Test comparisons trial2 %>% tbl_summary(by = trt) %>% add_p() 
 
+# difference in people who comment vs. those who do not. Remove testers, those joining befor elaunch
+newcomers_data_org$commenter <- ifelse(newcomers_data_org$newcomer_comment==0,0,1)  
+newcomers_data_compare <- newcomers_data_org[which(
+  !newcomers_data_org$user_id %in% team | 
+    !newcomers_data_org$user_id %in% testers | 
+    !newcomers_data_org$user_id %in% not_eligible),]
 
 
+# comparisons of work
+wilcox.test(newcomers_data_compare$newcomer_class,newcomers_data_compare$commenter)
+data_summary(newcomers_data_compare, varname=c("newcomer_class"), 
+                    groupnames=c("commenter"))
+
+
+wilcox.test(newcomers_data_compare$newcomer_sessions,newcomers_data_org$commenter)
+data_summary(newcomers_data_compare, varname=c("newcomer_sessions"), 
+                    groupnames=c("commenter"))
 ```
 
 
@@ -949,9 +963,9 @@ write.csv(comments_case,"/Volumes/cbjackson2/language models/narrativecase/comme
 ```{r }
 
 #Compare over the weeks, the differences in sustained/dropout interactions
-newcomer_com_week_summary <-  newcomer_comments 
 
-# Report table
+# Report table 
+x+5
 
 
 ```
