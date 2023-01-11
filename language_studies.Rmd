@@ -964,8 +964,10 @@ write.csv(comments_case,"/Volumes/cbjackson2/language models/narrativecase/comme
 
 #Compare over the weeks, the differences in sustained/dropout interactions
 
-# Report table 
+# Report table
 x+5
+
+89
 
 
 ```
