@@ -29,6 +29,8 @@ library(performance)
 library(tidytext)
 library(gridExtra)
 library(trend)
+library(kableExtra)
+
 
 #Functions
 logit2prob <- function(logit){
@@ -123,6 +125,9 @@ all_words$type <- ifelse(all_words$unigram %in% field,"Field",
 # A container is needed to compute since some weeks might not have new domain or field words
 # Get all weeks 
 
+
+
+
 weeks_s <- data.frame(all_comments_summary$week)
 names(weeks_s)[1] <- "week"
 
@@ -209,8 +214,6 @@ remove(all_comments_summary,all_words_summary,all_threads_summary,all_token_summ
 ####################  Visualize data (3x2) grid
 ####################  
 
-
-### Visualizing aggregate growth
 eco_grow_plot <- eco_grow[,c(1,3,7,11,15,19,23)] 
 eco_grow_plot$week <- as.Date(eco_grow_plot$week)
 eco_grow_plot.m <- melt(eco_grow_plot, id.vars="week")
@@ -222,23 +225,31 @@ feature_growth <- ggplot(eco_grow_plot.m, aes(week, value)) +
   geom_smooth(size=.7, color="grey") +
   labs(x="Date",y="Feature growth") + 
   scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
-  theme_classic() + scale_color_nejm() +
-  #scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="none", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 8),
-        axis.title = element_text(size = 10, face="bold")) + 
+  theme_classic() + 
+  scale_color_nejm() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=12,face = "bold"),
+        axis.text.x = element_text(size=10,face="bold"),
+        axis.title = element_blank()) +
   geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
   geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=2)) +
     facet_wrap(~variable, scales="free_y")
 
-
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_growth.pdf", width=11, height=4)
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_agg.pdf", width=30, height=15)
 feature_growth
 dev.off()
 
-### Visualizing weekly contributions (counts)
+png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_agg.png", width=30, height=15)
+feature_growth
+dev.off()
+
+tiff("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_agg.tiff", units="cm", width = 30, height = 15, res=300)
+feature_growth
+dev.off()
+
+
+############## COUNTS ############## 
 eco_count_plot <- eco_grow[,c(1,2,6,10,14,18,22)] 
 eco_count_plot$week <- as.Date(eco_count_plot$week)
 eco_count_plot.m <- melt(eco_count_plot, id.vars="week")
@@ -251,19 +262,27 @@ feature_count <- ggplot(eco_count_plot.m, aes(week, value)) +
   geom_smooth(size=.7, color="grey") +
   labs(x="Date",y="Feature growth") + 
   scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
-  theme_linedraw() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position="none", 
-        legend.title = element_blank(),
-        axis.text = element_text(size = 8),
-        axis.title = element_text(size = 10, face="bold")) + 
+  theme_classic() + 
+  scale_color_nejm() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=12,face = "bold"),
+        axis.text.x = element_text(size=10,face="bold"),
+        axis.title = element_blank()) +
   geom_vline(aes(xintercept=as.Date("2016-10-12")),size=.25) + 
   geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="grey", angle=90, vjust = -1, text=element_text(size=2)) +
     facet_wrap(~variable, scales="free_y")
 
 
-#pdf("/Users/jackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
-pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language[collab]/feature_count.pdf", width=11, height=4)
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_count.pdf ", width=30, height=15)
+feature_count
+dev.off()
+
+png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_count.png", units="cm", width = 30, height = 15, res=300)
+feature_count
+dev.off()
+
+tiff("/Users/coreyjackson/Library/CloudStorage/Box-Box/_research/language/group2025/figures/figure 4_count.tiff", units="cm", width = 30, height = 15, res=300)
 feature_count
 dev.off()
 
@@ -272,33 +291,48 @@ dev.off()
 ####################  
 
 ##### Conduct pettit test (changepoint) https://rpubs.com/shirazipooya/Pettitt-Test on the number of values each day 
-growth_pettit <- eco_count_plot.m %>% 
+growth_pettit_count <- eco_count_plot.m %>% 
   group_by(variable) %>% 
-  mutate(statistics = pettitt.test(value)$statistic,
-         estimate = pettitt.test(value)$estimate,
-         p_value = pettitt.test(value)$p.value,
+  mutate(pettit_statistics = pettitt.test(value)$statistic,
+         pettit_estimate = pettitt.test(value)$estimate,
+         pettit_p = pettitt.test(value)$p.value,
          week = eco_count_plot.m[['week']][pettitt.test(value)$estimate]) %>% 
-  distinct(variable,statistics,estimate,week,p_value)
+  distinct(variable,pettit_statistics,pettit_estimate,week,pettit_p)
+
+growth_sens_count <- eco_count_plot.m %>% 
+   group_by(variable) %>% 
+   mutate(sens_statistics = sens.slope(value, conf.level = 0.95)$statistic,
+          sens_estimate = sens.slope(value, conf.level = 0.95)$estimate,
+          sens_p = sens.slope(value, conf.level = 0.95)$p.value)%>% 
+   distinct(variable,sens_statistics,sens_estimate,sens_p)
+
+community_stats <- merge(growth_pettit_count,growth_sens_count, by = "variable", all.x = TRUE)
+community_stats <- community_stats %>% 
+  mutate_at(c(2:8), funs(round(., 4)))
 
 ##### Conduct growth models (answering ... which growth model describes content) https://rpubs.com/jaelison/200149 or #https://www.marinedatascience.co/blog/2019/09/28/comparison-of-change-point-detection-methods/
-
-eco_growthpct_plot <- eco_grow[,c(1,5,9,13,17,21,25)] 
-eco_growthpct_plot <- eco_growthpct_plot[which(eco_growthpct_plot$week > launch_date),] # remove after the launch
-eco_growthpct_plot$week <- as.Date(eco_growthpct_plot$week)
-eco_growthpct_plot.m <- melt(eco_growthpct_plot, id.vars="week")
-eco_growthpct_plot.m$transformed <- eco_growthpct_plot.m$value*100
-
-
 remove(unigrams,eco_count_plot,eco_count_plot.m,eco_grow_plot,eco_grow_plot.m)
+
+
+community_stats <- community_stats[,c(1,4,2,3,5:8)]
+community_table <- community_stats %>%
+  kbl(format = 'latex',
+   col.names = c("Measure","Week","Statistic","Estimate","Sig.",
+                 "Statistic","Estimate","Sig."),
+                  align="r") %>%
+   kable_classic(full_width = F, html_font = "helvetica") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F, position = "float_right") %>%
+  add_header_above(c(" ", "Change-point(Pettit)" = 4, "Rate of Change (Sens Slope)" = 3)) 
+
+remove(community_stats)
 ```
 
 ```{r }
-
 newcomers_data <- read_csv("/Volumes/cbjackson2/language models/newcomer_info.csv",show_col_types = FALSE)
 newcomers_data <- newcomers_data[,-1]
 
 testers <- newcomers_data$user_id[which(newcomers_data$join_date < launch_date)]
-not_eligible <- newcomers_data$user_id[which(newcomers_data$join_date > max(all_comments$comment_created_at) - months(2))]
+not_eligible <- newcomers_data$user_id[which(newcomers_data$join_date > max(all_comments$comment_created_at) - months(1))]
 
 #remove people who are project management, science team, and before launch
 project_team <- c("uber_pye","areeda","mzevin1","RF45","jrsmith02","sbc538","adamamiller","olipatane","smarttiz","jafeldt","mcoughlin","citizenscientist1994","cjackso3", "camallen","lmp579","sciencejedi","crowston","Carsten","jessiemcd","ejm553","srallen", "costerlu@syr.edu","lcalian","joeykey","matsoulina","trouille","zooniverse")
@@ -325,7 +359,7 @@ newcomer_comments <- merge(all_comments,newcomers_data[,c("user_id","join_date")
 
 ###### CHANGE DATA TO VIEW
 
-newcomer_comments$include <- ifelse(newcomer_comments$comment_created_at <= add_with_rollback(newcomer_comments$join_date, months(2), roll_to_first = TRUE),1,0)
+newcomer_comments$include <- ifelse(newcomer_comments$comment_created_at <= add_with_rollback(newcomer_comments$join_date, months(1), roll_to_first = TRUE),1,0)
 newcomer_comments <- newcomer_comments[which(newcomer_comments$include==1),]
 newcomer_comments <- newcomer_comments[which(newcomer_comments$comment_user_id %in% population),] # only eligible people
 
@@ -962,12 +996,6 @@ write.csv(comments_case,"/Volumes/cbjackson2/language models/narrativecase/comme
 
 ```{r }
 
-#Compare over the weeks, the differences in sustained/dropout interactions
-
-# Report table
-x+5
-
-89
 
 
 ```
