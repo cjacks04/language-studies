@@ -1,0 +1,32 @@
+---
+title: "Language Socialization"
+author: "Corey Jackson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(data.table)
+cosine_similarity <- fread("/Volumes/cbjackson2/language models/analysis_v2/cosine_similarity.csv")
+join_date <- fread("/Volumes/cbjackson2/language models/analysis_v2/join_date-2023_11_07.csv")
+promoted_date <- fread("/Volumes/cbjackson2/language models/analysis_v2/promoted_date-2023_11_07.csv")
+
+classifications <- fread("/Volumes/cbjackson2/Zooniverse Datasets/Gravity Spy/2023-11-07/gravity-spy-classifications.csv")
+
+join_date <- classifications %>%
+  group_by(user_name)  %>%
+    summarize(joined = min(created_at))
+
+promoted_date <- classifications %>%
+  group_by(user_name, workflow_name)  %>%
+    summarize(promoted = min(created_at))
+
+write.csv(join_date,"/Volumes/cbjackson2/language models/analysis_v2/join_date-2023_11_07.csv")
+write.csv(promoted_date,"/Volumes/cbjackson2/language models/analysis_v2/promoted_date-2023_11_07.csv")
+
+
+# Remove weeks not included in classification data
+```
+
+
