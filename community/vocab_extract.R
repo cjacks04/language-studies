@@ -10,7 +10,12 @@ malletwords <- scan("/Volumes/cbjackson2/language models/mallet.txt", character(
 
 
 #######  import comments from Gravity Spy
-gravityspy_comments <- read_csv("/Volumes/cbjackson2/language models/projects/gravityspy/gravity-spy-comments.csv")
+#gravityspy_comments <- read_csv("/Volumes/cbjackson2/language models/projects/gravityspy/gravity-spy-comments.csv")
+
+gravityspy_comments <- read_csv("/Volumes/cbjackson2/Zooniverse Datasets/Gravity Spy/2024-01-29/gravity-spy-comments_2024-01-29.csv")
+
+
+
 
 # Data transformations
 gravityspy_comments$comment_body <-  gsub("http[[:alnum:][:punct:]]*", "", gravityspy_comments$comment_body)# remove URLs
@@ -84,16 +89,16 @@ citizen_science_words <- gravitspy_words[gravitspy_words %in% snapshot_words]
 citizen_science_words <- citizen_science_words[citizen_science_words %in% planet_words] 
 
 #setwd("~/Box/Research/Language Studies (CS)/Analysis/Extracting Vocabulary/")
-write.table(citizen_science_words,"/Volumes/cbjackson2/language models/citizen_science_words.txt", row.names=FALSE,sep="\t", quote = FALSE)
+write.table(citizen_science_words,"/Volumes/cbjackson2/language models/citizen_science_words2.txt", row.names=FALSE,sep="\t", quote = FALSE)
 
 # astonomy science words (get those also in Planet Hunters)
 astronomy_words <- gravitspy_words[gravitspy_words %in% planet_words] 
 astronomy_words <- astronomy_words[!astronomy_words %in% citizen_science_words] 
-write.table(astronomy_words,"/Volumes/cbjackson2/language models/astronomy_words.txt", row.names=FALSE,sep="\t", quote = FALSE)
+write.table(astronomy_words,"/Volumes/cbjackson2/language models/astronomy_words2.txt", row.names=FALSE,sep="\t", quote = FALSE)
 
 # gravity spy domain science words (get those not in Planet Hunters and not in Snapshot)
 domain_science_words <- gravitspy_words[!gravitspy_words %in% astronomy_words] 
 domain_science_words <- domain_science_words[!domain_science_words %in% citizen_science_words] 
-write.table(domain_science_words,"/Volumes/cbjackson2/language models/domain_science_words.txt", row.names=FALSE,sep="\t", quote = FALSE)
+write.table(domain_science_words,"/Volumes/cbjackson2/language models/domain_science_words2.txt", row.names=FALSE,sep="\t", quote = FALSE)
 
 
