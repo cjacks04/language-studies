@@ -389,7 +389,6 @@ comment_week_summary <- newcomer_comments %>%
             field_words = sum(field_words)
   )
 
-
 comment_week_summary <- data.frame(comment_week_summary)
 comment_week_summary <- comment_week_summary[order(comment_week_summary$user_id,comment_week_summary$week),]
 comment_week_summary <- as.data.table(comment_week_summary)[, comment_week := 1:.N,, by = list(user_id)] 
