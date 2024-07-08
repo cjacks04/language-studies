@@ -431,8 +431,8 @@ eco_growth_plotall.m$variable <-
   )
 
 all_growth <- ggplot(eco_growth_plotall.m, aes(as.Date(week), value)) + 
-  geom_line(size=.5) + 
-  geom_smooth(size=.7, color="grey") +
+  geom_point(size=.25) + 
+  geom_smooth(size=.7, color="#E18727FF") +
   labs(x="Date",y="Feature growth") + 
   scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
   theme_minimal() + 
@@ -473,6 +473,275 @@ png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/language s
 all_growth_png
 dev.off()
 
+########## GROWTH CURVES
+
+community_summary_curated <- community_summary[which(community_summary$week >= "2016-10-12"),]
+community_summary_curated <- community_summary_curated[order(community_summary_curated$week),]
+community_summary_curated <- as.data.table(community_summary_curated)[, project_week := 1:.N,, by = list()] 
+
+## COMMENT COUNT MODEL DECAY
+linear_decay_comments <- lm(comment_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_comments <- nls(comment_count ~ a * exp(-b * project_week), 
+                   data = community_summary_curated, 
+                   start = start_values)
+
+logarithmic_decay_comments <- nls(comment_count ~ a - b * log(project_week), 
+                               data = community_summary_curated, 
+                               start = list(a = max(community_summary_curated$comment_count), b = 1))
+
+AIC(linear_decay_comments)
+AIC(exponential_decay_comments)
+AIC(logarithmic_decay_comments)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred <- predict(linear_decay_comments, newdata = community_summary_curated)
+community_summary_curated$exp_pred <- predict(exponential_decay_comments, newdata = community_summary_curated)
+community_summary_curated$log_pred <- predict(logarithmic_decay_comments, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+comment_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = comment_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred), color = "green") +
+  labs(x = "Week", y = "Comment Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+##############################
+## THREADS COUNT MODEL DECAY
+linear_decay_threads <- lm(thread_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_threads <- nls(thread_count ~ a * exp(-b * project_week), 
+                                  data = community_summary_curated, 
+                                  start = start_values)
+
+logarithmic_decay_threads <- nls(thread_count ~ a - b * log(project_week), 
+                                  data = community_summary_curated, 
+                                  start = list(a = max(community_summary_curated$thread_count), b = 1))
+
+AIC(linear_decay_threads)
+AIC(exponential_decay_threads)
+AIC(logarithmic_decay_threads)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_threds <- predict(linear_decay_threads, newdata = community_summary_curated)
+community_summary_curated$exp_pred_threds <- predict(exponential_decay_threads, newdata = community_summary_curated)
+community_summary_curated$log_pred_threds <- predict(logarithmic_decay_threads, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+thread_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = thread_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_threds), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_threds), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_threds), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+##############################
+## NEWTOKENS COUNT MODEL DECAY
+linear_decay_tokens <- lm(newtoken_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_tokens <- nls(newtoken_count ~ a * exp(-b * project_week), 
+                                 data = community_summary_curated, 
+                                 start = start_values)
+
+logarithmic_decay_tokens <- nls(newtoken_count ~ a - b * log(project_week), 
+                                 data = community_summary_curated, 
+                                 start = list(a = max(community_summary_curated$newtoken_count), b = 1))
+
+AIC(linear_decay_tokens)
+AIC(exponential_decay_tokens)
+AIC(logarithmic_decay_tokens)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_tokens <- predict(linear_decay_tokens, newdata = community_summary_curated)
+community_summary_curated$exp_pred_tokens <- predict(exponential_decay_tokens, newdata = community_summary_curated)
+community_summary_curated$log_pred_tokens <- predict(logarithmic_decay_tokens, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+newtoken_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = newtoken_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_tokens), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_tokens), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_tokens), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+######################################
+## NEW THREADS COUNT MODEL DECAY
+linear_decay_newthreads <- lm(newthread_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_newthreads <- nls(newthread_count ~ a * exp(-b * project_week), 
+                                 data = community_summary_curated, 
+                                 start = start_values)
+
+logarithmic_decay_newthreads <- nls(newthread_count ~ a - b * log(project_week), 
+                                 data = community_summary_curated, 
+                                 start = list(a = max(community_summary_curated$newthread_count), b = 1))
+
+AIC(linear_decay_newthreads)
+AIC(exponential_decay_newthreads)
+AIC(logarithmic_decay_newthreads)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_newthreds <- predict(linear_decay_newthreads, newdata = community_summary_curated)
+community_summary_curated$exp_pred_newthreds <- predict(exponential_decay_newthreads, newdata = community_summary_curated)
+community_summary_curated$log_pred_newthreds <- predict(logarithmic_decay_newthreads, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+newthread_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = newthread_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_newthreds), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_newthreds), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_newthreds), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+
+
+##############################
+## ALL TOKENS COUNT MODEL DECAY
+linear_decay_alltokens <- lm(token_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_alltokens <- nls(token_count ~ a * exp(-b * project_week), 
+                                data = community_summary_curated, 
+                                start = start_values)
+
+logarithmic_decay_alltokens <- nls(token_count ~ a - b * log(project_week), 
+                                data = community_summary_curated, 
+                                start = list(a = max(community_summary_curated$token_count), b = 1))
+
+AIC(linear_decay_alltokens)
+AIC(exponential_decay_alltokens)
+AIC(logarithmic_decay_alltokens)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_alltokens <- predict(linear_decay_alltokens, newdata = community_summary_curated)
+community_summary_curated$exp_pred_alltokens <- predict(exponential_decay_alltokens, newdata = community_summary_curated)
+community_summary_curated$log_pred_alltokens <- predict(logarithmic_decay_alltokens, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+token_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = token_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_alltokens), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_alltokens), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_alltokens), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+
+
+##############################
+## USERS COUNT MODEL DECAY
+linear_decay_user <- lm(user_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_user <- nls(user_count ~ a * exp(-b * project_week), 
+                                   data = community_summary_curated, 
+                                   start = start_values)
+
+logarithmic_decay_user <- nls(user_count ~ a - b * log(project_week), 
+                                   data = community_summary_curated, 
+                                   start = list(a = max(community_summary_curated$user_count), b = 1))
+
+AIC(linear_decay_user)
+AIC(exponential_decay_user)
+AIC(logarithmic_decay_user)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_user <- predict(linear_decay_user, newdata = community_summary_curated)
+community_summary_curated$exp_pred_user <- predict(exponential_decay_user, newdata = community_summary_curated)
+community_summary_curated$log_pred_user <- predict(logarithmic_decay_user, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+user_decay_viz <- ggplot(community_summary_curated, aes(x = project_week, y = user_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_user), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_user), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_user), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+
+##############################
+## NEW USERS COUNT MODEL DECAY
+linear_decay_newuser <- lm(newuser_count ~ project_week, data = community_summary_curated)
+
+exponential_decay_newuser <- nls(newuser_count ~ a * exp(-b * project_week), 
+                                   data = community_summary_curated, 
+                                   start = start_values)
+
+logarithmic_decay_newuser <- nls(newuser_count ~ a - b * log(project_week), 
+                                   data = community_summary_curated, 
+                                   start = list(a = max(community_summary_curated$newuser_count), b = 1))
+
+AIC(linear_decay_newuser)
+AIC(exponential_decay_newuser)
+AIC(logarithmic_decay_newuser)
+
+# Predict values using the fitted models
+community_summary_curated$linear_pred_newuser <- predict(linear_decay_newuser, newdata = community_summary_curated)
+community_summary_curated$exp_pred_newuser <- predict(exponential_decay_newuser, newdata = community_summary_curated)
+community_summary_curated$log_pred_newuser <- predict(logarithmic_decay_newuser, newdata = community_summary_curated)
+
+# Plot the original data and the fitted curves
+newuser_decay_viz <-  ggplot(community_summary_curated, aes(x = project_week, y = newuser_count)) +
+  geom_point(size=.5) +
+  geom_line(aes(y = linear_pred_newuser), color = "blue", linetype = "dashed") +
+  geom_line(aes(y = exp_pred_newuser), color = "red", linetype = "dotted") +
+  geom_line(aes(y = log_pred_newuser), color = "green") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=12,face = "bold"),
+        legend.position = "none",
+        axis.text = element_text(size=6,face = "bold"),
+        axis.title = element_blank()) +
+  scale_color_manual(name = "Model", values = c("linear" = "blue", "exp" = "red", "log" = "green"))
+
+
+
+# Create the combined 2x6 plot
+combined_2x6 <- all_growth_png
+
+# Create a single 6 plots layout
+combined_6 <- (comment_decay_viz / newthread_decay_viz / newtoken_decay_viz / newuser_decay_viz / thread_decay_viz / token_decay_viz / user_decay_viz) 
+
+# Combine the two sets into a 3x6 layout
+final_combined <- (combined_2x6 | combined_6) + plot_layout(widths = c(2, 1))
+
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/language socialization/figures/combined_growth.pdf", width=11, height=10)
+final_combined
+dev.off()
+
+png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/language socialization/figures/combined_growth.png",width = 6, height = 5, units='in', res = 300)
+final_combined
+dev.off()
+
 ############################################################ 
 ####################  Volunteer Analysis ###################
 ############################################################ 
@@ -492,6 +761,7 @@ user_class_summary <- class_summary %>%
     last_comment_week = max(as.Date(floor_date(finished[which(comments > 0)], "week"))),
     last_classification_week = max(as.Date(floor_date(finished[which(classifications > 0)], "week")))
   )
+
 
 cosine <- fread("/Volumes/cbjackson2/language/analysis_v2/cosine_similarity.csv") 
 cosine$V1 <- NULL; names(cosine)[1] <-"user_id"
@@ -566,7 +836,6 @@ trainIndex_commenter <- createDataPartition(predictors$retained, p = .7,
                                             times = 1)
 train_commenter <- predictors[ trainIndex_commenter,]
 valid_commenter <- predictors[-trainIndex_commenter,]
-
 
 # Fit a logistic regression model
 retained.logistic <- glm(retained ~ week + weeks_since_joined + days + comments + questions + links +
