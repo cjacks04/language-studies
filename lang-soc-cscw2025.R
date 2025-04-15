@@ -459,17 +459,22 @@ all_growth_png <- ggplot(eco_growth_plotall.m, aes(as.Date(week), value)) +
   scale_x_date(date_labels="%b %y",date_breaks  ="6 month") + 
   theme_minimal() + 
   scale_color_nejm() +
-  theme(plot.title = element_text(size=12,face = "bold"),
+  theme(plot.title = element_text(size=20,face = "bold"),
         legend.position = "none",
-        axis.text = element_text(size=6,face = "bold"),
+        axis.text = element_text(size=11,face = "bold"),
         axis.text.x = element_text(angle=90),
-        axis.title = element_blank()) +
+        axis.title = element_blank(),
+        strip.text = element_text(size = 14, face = "bold")) +
   geom_vline(aes(xintercept=as.Date("2016-10-12")),linewidth=.5, colour="#0072B5FF") + 
   #geom_text(aes(x=as.Date("2016-10-11"), label="", y=.50), colour="red", angle=90, vjust = -1, text=element_text(size=2)) +
-  facet_wrap(~variable, scales="free_y", ncol = 2)
+  facet_wrap(~variable, scales="free_y", ncol = 4)
 
 
-png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/language socialization/figures/all_growth.png",width = 6, height = 5, units='in', res = 300)
+png("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/language socialization/figures/all_growth.png",width = 8, height = 5, units='in', res = 300)
+all_growth_png
+dev.off()
+
+pdf("/Users/coreyjackson/Library/CloudStorage/Box-Box/_working papers/knowledge-discovery (ICWSM)/all_growth_4col.pdf",width = 13, height = 5)
 all_growth_png
 dev.off()
 
